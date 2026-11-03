@@ -77,6 +77,29 @@
   .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
     background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: .95; }
+
+  /* 分頁 */
+  .tabs { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
+  .tabs button { flex: 1; border: 0; background: transparent; font-weight: 600; min-height: 42px; }
+  .tabs button.on { background: var(--accent); color: var(--accent-ink); }
+
+  /* 熄 mon 提示 */
+  .warnbox { border: 1px solid var(--warn); border-radius: 12px; padding: 10px 12px; margin-top: 14px; font-size: 14.5px; }
+  .warnbox > summary { color: var(--warn); font-weight: 700; }
+  .warnbox ol { margin: 8px 0 4px; padding-left: 20px; }
+  .warnbox li { margin: 4px 0; }
+
+  /* 講嘢打字 */
+  .mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 4px 0 12px; }
+  .mic { width: 112px; height: 112px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink);
+    font-size: 40px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 4px 14px rgba(0,0,0,.18); transition: transform .1s; }
+  .mic span { font-size: 13px; font-weight: 700; }
+  .mic.rec { background: #c62828; color: #fff; transform: scale(1.08); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(198,40,40,.5); } 100% { box-shadow: 0 0 0 22px rgba(198,40,40,0); } }
+  #dict { min-height: 220px; font-size: 17px; line-height: 1.7; }
+  .selhint { min-height: 1.4em; font-size: 14px; color: var(--accent); margin: 2px 0 6px; text-align: center; }
 </style>
 </head>
 <body>
@@ -121,6 +144,33 @@
     <div class="btns"><button id="saveSettings" type="button">💾 儲存設定</button></div>
   </details>
 
+  <nav class="tabs">
+    <button type="button" id="tabBtnDict">🎙️ 講嘢打字</button>
+    <button type="button" id="tabBtnFile">📁 錄音檔轉文字</button>
+  </nav>
+
+  <!-- ===================== 講嘢打字 ===================== -->
+  <div id="tabDict">
+  <section class="card">
+    <div class="mic-wrap">
+      <button id="mic" class="mic" type="button" aria-label="撳住講嘢">🎙️<span id="micLabel">撳住講嘢</span></button>
+      <div class="hint" id="dStatus" style="text-align:center">撳住講，放手就變文字。撳一下＝開始，再撳一下＝停。</div>
+    </div>
+    <div class="selhint" id="selHint"></div>
+    <textarea id="dict" inputmode="none" placeholder="講完嘅文字會喺度出現。&#10;&#10;想改某幾隻字：揀起嗰幾隻字，再撳住個咪講一次，就只會換嗰幾隻字。&#10;唔揀字就會加喺閃爍游標嗰度（未撳過就加喺最尾）。"></textarea>
+    <div class="btns">
+      <button id="dCopy" type="button">📋 複製全部</button>
+      <button id="dKbd" type="button">⌨️ 開鍵盤</button>
+    </div>
+    <div class="btns">
+      <button id="dUndo" type="button">↩️ 復原</button>
+      <button id="dClear" type="button" class="danger">🗑️ 清除</button>
+    </div>
+    <p class="hint">每段錄音都會用到 ElevenLabs 額度（按錄音長度計）。文字會自動儲喺呢部手機，閂咗個網頁都唔會唔見。</p>
+  </section>
+  </div>
+
+  <div id="tabFile">
   <!-- ===================== 轉文字 ===================== -->
   <section class="card">
     <h2>1. 揀錄音檔</h2>
@@ -136,6 +186,18 @@
 
     <label class="row" for="extraTerms">今次額外關鍵詞（可以唔填）</label>
     <input id="extraTerms" type="text" placeholder="用逗號分開，例如：李太, Zoom">
+
+    <details class="warnbox hidden" id="lockWarn">
+      <summary>📱 用手機轉：轉緊嘅時候唔可以熄 mon</summary>
+      <p style="margin:8px 0 0">轉長錄音要等幾分鐘到十幾分鐘。期間如果熄咗 mon、或者轉咗去第二個 app，手機會截斷條連線，<b>結果會收唔到，但 ElevenLabs 可能照樣收費</b>。程式會盡量叫部手機唔好熄 mon，但唔係每部手機都肯，所以開始之前最好先改設定：</p>
+      <ol>
+        <li><b>iPhone：</b>「設定」→「螢幕顯示與亮度」→「自動鎖定」→ 揀「永不」（用完記得調返）。</li>
+        <li><b>iPhone 開咗「低耗電模式」</b>會強制 30 秒熄 mon，要先喺「設定」→「電池」關咗佢。</li>
+        <li><b>Android：</b>「設定」→「顯示」→「螢幕逾時」（Samsung 叫「螢幕自動關閉時間」）→ 揀 10 分鐘或以上。</li>
+        <li>轉緊嘅時候，將手機擺低、唔好撳 Home、唔好開第二個 app。</li>
+      </ol>
+      <label class="check"><input type="checkbox" id="lockAck"> 我已經調好，下次唔使預設打開</label>
+    </details>
 
     <div style="margin-top:16px"><button id="go" class="primary" type="button">▶ 開始轉文字</button></div>
     <div class="btns hidden" id="cancelRow"><button id="cancel" type="button" class="danger">✖ 取消</button></div>
@@ -180,6 +242,7 @@
     <ul class="hist" id="hist"></ul>
     <p class="hint" id="histEmpty">未有。轉完嘅結果會自動儲喺呢部手機，唔使再上載、唔使再俾錢就可以再睇。</p>
   </section>
+  </div>
 </main>
 <div class="toast" id="toast"></div>
 
@@ -384,13 +447,20 @@ $("file").onchange = () => {
 // ------------------------------------------------------------ 上載 + 轉文字
 let xhr = null, busy = false, wakeLock = null, timer = null;
 
+/** 叫部手機唔好熄 mon。返回 true = 手機肯；false = 唔肯（要靠用家自己改設定） */
 async function keepAwake(on) {
   try {
     if (on && "wakeLock" in navigator) {
       wakeLock = await navigator.wakeLock.request("screen");
+      return true;
     } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
   } catch {}
+  return false;
 }
+const IS_PHONE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) ||             // iPad 扮 Mac
+  (!!window.matchMedia && matchMedia("(pointer: coarse)").matches);
+const isPhone = () => IS_PHONE;
 document.addEventListener("visibilitychange", () => { if (busy && document.visibilityState === "visible") keepAwake(true); });
 window.addEventListener("beforeunload", (e) => { if (busy) { e.preventDefault(); e.returnValue = ""; } });
 
@@ -405,13 +475,13 @@ function errText(x) {
   return `HTTP ${x.status}：${msg || x.statusText || "未知錯誤"}`;
 }
 
-function callApi(key, f, fields, onUp) {
+function callApi(key, f, fields, onUp = () => {}, track = true) {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     for (const [k, v] of fields) fd.append(k, v);
     fd.append("file", f, f.name);
     const x = new XMLHttpRequest();
-    xhr = x;
+    if (track) xhr = x;
     x.open("POST", API_URL);
     x.setRequestHeader("xi-api-key", key);
     x.setRequestHeader("Accept", "application/json");
@@ -439,6 +509,12 @@ $("go").onclick = async () => {
   let terms;
   try { terms = parseTerms(store.get("terms") + "," + $("extraTerms").value); } catch (e) { alert(e.message); return; }
   if (!cc && settings().trad && !confirm("繁體轉換載入唔到（可能網絡問題），出嚟可能有簡體字。之後喺「之前轉過嘅」再開一次就會轉返。照樣開始？")) return;
+  if (isPhone() && store.get("lockAck") !== "1" &&
+      !confirm("開始之前提一提：轉緊嘅時候如果手機自動熄 mon，結果會收唔到（ElevenLabs 可能照樣收費）。\n\n" +
+               "你調長咗「自動鎖定／螢幕逾時」未？\n\n撳「確定」開始；撳「取消」睇點樣改。")) {
+    const w = $("lockWarn"); w.open = true; w.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   if (!store.get("key")) store.set("key", key);
 
   const lang = settings().lang;
@@ -453,14 +529,17 @@ $("go").onclick = async () => {
   busy = true;
   $("go").disabled = true; $("cancelRow").classList.remove("hidden");
   const bar = $("bar"); bar.classList.remove("hidden"); bar.value = 0;
-  keepAwake(true);
+  const awake = await keepAwake(true);
+  const awakeMsg = !isPhone() ? "" : awake
+    ? "\n🔆 已經叫咗部手機唔好熄 mon，但都唔好轉去第二個 app。"
+    : "\n⚠️ 呢部手機唔俾網頁控制熄 mon：請跟上面「📱」嘅方法改「自動鎖定」，或者每分鐘掂一掂個螢幕。";
   const t0 = Date.now();
   let phase = "up", upPct = 0;
   const tick = () => {
     const el = Math.floor((Date.now() - t0) / 1000);
     const time = `${Math.floor(el / 60)} 分 ${String(el % 60).padStart(2, "0")} 秒`;
-    if (phase === "up") say(`⏫ 上載緊…${Math.round(upPct * 100)}%（${time}）\n唔好熄 mon、唔好轉去第二個 app。`);
-    else say(`⏳ ElevenLabs 轉緊文字…已經過咗 ${time}\n兩個半鐘嘅錄音大約要幾分鐘到十幾分鐘。唔好熄 mon、唔好轉去第二個 app。`);
+    if (phase === "up") say(`⏫ 上載緊…${Math.round(upPct * 100)}%（${time}）` + awakeMsg);
+    else say(`⏳ ElevenLabs 轉緊文字…已經過咗 ${time}\n兩個半鐘嘅錄音大約要幾分鐘到十幾分鐘。` + awakeMsg);
   };
   timer = setInterval(tick, 1000); tick();
   const onUp = (p) => {
@@ -659,6 +738,231 @@ async function refreshHistory() {
   }
 }
 
+// ------------------------------------------------------------ 分頁
+function showTab(name) {
+  $("tabDict").classList.toggle("hidden", name !== "dict");
+  $("tabFile").classList.toggle("hidden", name !== "file");
+  $("tabBtnDict").classList.toggle("on", name === "dict");
+  $("tabBtnFile").classList.toggle("on", name === "file");
+  store.set("tab", name);
+}
+$("tabBtnDict").onclick = () => showTab("dict");
+$("tabBtnFile").onclick = () => showTab("file");
+
+// ------------------------------------------------------------ 熄 mon 提示（只喺手機顯示）
+if (isPhone()) {
+  $("lockWarn").classList.remove("hidden");
+  $("lockAck").checked = store.get("lockAck") === "1";
+  $("lockWarn").open = !$("lockAck").checked;
+}
+$("lockAck").onchange = () => { store.set("lockAck", $("lockAck").checked ? "1" : "0"); if ($("lockAck").checked) $("lockWarn").open = false; };
+
+// ------------------------------------------------------------ 講嘢打字（撳住講、放手就變文字）
+const dict = $("dict");
+const MIME = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"]
+  .find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || "";
+const extFor = (m) => (/mp4|m4a|aac/.test(m) ? "m4a" : /ogg/.test(m) ? "ogg" : "webm");
+let micStream = null, recorder = null, chunks = [], recT0 = 0, recTimer = null, releaseTimer = null;
+let micState = "idle";          // idle → starting → recording（hold／toggle）
+let pressT = 0, toggleMode = false, releasedWhileStarting = false, target = null, dictTouched = false, seq = 0;
+const undoStack = [];
+const dsay = (m) => { $("dStatus").textContent = m; };
+
+dict.value = store.get("dict");
+const saveDict = () => store.set("dict", dict.value);
+dict.addEventListener("input", saveDict);
+for (const ev of ["focus", "click", "keyup", "select", "input"]) dict.addEventListener(ev, () => { dictTouched = true; showSel(); });
+document.addEventListener("selectionchange", () => { if (document.activeElement === dict) showSel(); });
+
+function currentSel() {
+  if (!dictTouched) return { start: dict.value.length, end: dict.value.length };
+  return { start: dict.selectionStart, end: dict.selectionEnd };
+}
+function showSel() {
+  if (micState !== "idle") return;
+  const { start, end } = currentSel();
+  const s = dict.value.slice(start, end);
+  $("selHint").textContent = s ? `🎯 下一段錄音會取代：「${s.length > 24 ? s.slice(0, 24) + "…" : s}」` : "";
+}
+
+$("dKbd").onclick = () => {
+  const on = dict.getAttribute("inputmode") === "none";
+  dict.setAttribute("inputmode", on ? "text" : "none");
+  $("dKbd").textContent = on ? "⌨️ 收起鍵盤" : "⌨️ 開鍵盤";
+  dict.blur(); if (on) setTimeout(() => dict.focus(), 50);
+};
+$("dCopy").onclick = async () => {
+  const text = dict.value.replace(/〔⏳\d+〕/g, "");
+  if (!text.trim()) { toast("未有文字"); return; }
+  try { await navigator.clipboard.writeText(text); toast("✅ 已複製"); }
+  catch { dict.focus(); dict.select(); const ok = document.execCommand && document.execCommand("copy"); toast(ok ? "✅ 已複製" : "複製唔到，請長按文字自己揀"); }
+};
+$("dUndo").onclick = () => {
+  if (!undoStack.length) { toast("冇嘢可以復原"); return; }
+  dict.value = undoStack.pop(); saveDict(); showSel(); toast("↩️ 已復原");
+};
+$("dClear").onclick = () => {
+  if (!dict.value) return;
+  if (!confirm("清除全部文字？（可以撳「↩️ 復原」攞返）")) return;
+  undoStack.push(dict.value); dict.value = ""; dictTouched = false; saveDict(); showSel();
+};
+
+async function getMic() {
+  if (micStream && micStream.getTracks().some((t) => t.readyState === "live")) return micStream;
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  return micStream;
+}
+function releaseMicLater() {      // 停咗 1 分鐘就熄咪（手機頂嗰粒「用緊咪」燈會熄）
+  clearTimeout(releaseTimer);
+  releaseTimer = setTimeout(() => {
+    if (micState === "idle" && micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  }, 60000);
+}
+function setMicUI() {
+  const rec = micState === "recording";
+  $("mic").classList.toggle("rec", rec);
+  $("micLabel").textContent = rec ? (toggleMode ? "撳一下停" : "放手就停") : micState === "starting" ? "準備緊…" : "撳住講嘢";
+}
+
+async function startRec() {
+  if (!navigator.mediaDevices || !window.MediaRecorder) { alert("呢個瀏覽器唔支援錄音。iPhone 請用 Safari（iOS 14.3 或以上），Android 請用 Chrome。"); return; }
+  if (!settings().key) { $("settings").open = true; toast("請先喺「設定」貼上 API key"); $("settings").scrollIntoView({ behavior: "smooth" }); return; }
+  target = currentSel();
+  micState = "starting"; releasedWhileStarting = false; setMicUI();
+  try {
+    const stream = await getMic();
+    chunks = [];
+    recorder = MIME ? new MediaRecorder(stream, { mimeType: MIME }) : new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = finishRec;
+    recorder.start(250);
+    recT0 = Date.now();
+    micState = "recording";
+    clearTimeout(releaseTimer);
+    if (navigator.vibrate) navigator.vibrate(30);
+    recTimer = setInterval(() => {
+      const s = Math.floor((Date.now() - recT0) / 1000);
+      dsay(`🔴 錄緊 ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` + (toggleMode ? "　（撳一下停）" : "　（放手就停）"));
+    }, 250);
+    if (releasedWhileStarting) {
+      if (Date.now() - pressT < 400) toggleMode = true;           // 撳一下：轉做「再撳一下停」
+      else { recorder.onstop = null; recorder.stop(); micState = "idle"; clearInterval(recTimer);   // 啱啱彈咗「准唔准用咪」
+             setMicUI(); dsay("✅ 可以用咪喇。撳住個咪講嘢，放手就變文字。"); releaseMicLater(); return; }
+    }
+    setMicUI();
+  } catch (e) {
+    micState = "idle"; setMicUI();
+    dsay(e && e.name === "NotAllowedError"
+      ? "❌ 未俾權限用咪。iPhone：設定 → Safari → 麥克風 → 允許；Android：撳網址列左邊個鎖 → 權限 → 麥克風。"
+      : "❌ 開唔到咪：" + (e && e.message || e));
+  }
+}
+function stopRec() {
+  if (micState !== "recording" || !recorder) return;
+  clearInterval(recTimer);
+  micState = "idle"; toggleMode = false; setMicUI();
+  try { recorder.stop(); } catch {}
+  releaseMicLater();
+}
+
+function finishRec() {
+  const ms = Date.now() - recT0;
+  const type = (recorder && recorder.mimeType) || MIME || "audio/webm";
+  const blob = new Blob(chunks, { type });
+  chunks = [];
+  if (ms < 600 || blob.size < 1000) { dsay("太短喇，撳住個咪講嘢，講完先放手。"); showSel(); return; }
+  // 喺目標位置放個「⏳」記號（取代揀咗嘅字），轉好再換做文字；期間你照樣可以改其他地方、再錄下一段
+  const id = ++seq, mark = `〔⏳${id}〕`;
+  let { start, end } = target;
+  const v = dict.value;
+  start = Math.min(start, v.length); end = Math.min(Math.max(end, start), v.length);
+  const replaced = v.slice(start, end);
+  undoStack.push(v); if (undoStack.length > 50) undoStack.shift();
+  dict.value = v.slice(0, start) + mark + v.slice(end);
+  saveDict();
+  if (document.activeElement === dict) dict.setSelectionRange(start + mark.length, start + mark.length);
+  $("selHint").textContent = "";
+  dsay("⏳ 轉緊文字…");
+  transcribeClip(blob, type, id, mark, replaced);
+}
+
+async function transcribeClip(blob, type, id, mark, replaced) {
+  const s = settings();
+  let terms = [];
+  try { terms = parseTerms(s.terms); } catch {}
+  const fields = (lang) => {
+    const f = [["model_id", "scribe_v2"], ["diarize", "false"], ["tag_audio_events", "false"], ["timestamps_granularity", "none"]];
+    if (lang) f.push(["language_code", lang]);
+    for (const t of terms) f.push(["keyterms", t]);
+    return f;
+  };
+  const f = new File([blob], `dictation-${id}.${extFor(type)}`, { type: type.split(";")[0] });
+  let text = "", err = "";
+  try {
+    let res;
+    try { res = await callApi(s.key, f, fields(s.lang), undefined, false); }
+    catch (e) {
+      if ((e.status === 400 || e.status === 422) && s.lang && /language/i.test(e.msg)) res = await callApi(s.key, f, fields(""), undefined, false);
+      else throw e;
+    }
+    text = (res.text || "").trim();
+    if (s.trad) text = toTraditional(text);
+    if (s.rules.length) text = applyRules(text, s.rules)[0];
+    // 只係改幾隻字嘅話，唔好俾佢自己加個「。」
+    if (replaced && !/[。，！？.!?,]$/.test(replaced)) text = text.replace(/[。，！？.!?,、]+$/, "");
+    if (!text) err = "聽唔到有人講嘢";
+  } catch (e) {
+    const hint = { 401: "（API key 唔啱，或者冇開 Speech to Text 權限）", 402: "（額度唔夠）", 429: "（太多請求或者額度用晒）" }[e.status] || "";
+    err = (e.msg || String(e)) + hint;
+  }
+  const v = dict.value, i = v.indexOf(mark);
+  const put = err ? replaced : text;
+  if (i >= 0) {
+    // 中英之間加空格
+    const before = v.slice(0, i), after = v.slice(i + mark.length);
+    const sp1 = /[A-Za-z0-9]$/.test(before) && /^[A-Za-z0-9]/.test(put) ? " " : "";
+    const sp2 = /[A-Za-z0-9]$/.test(put) && /^[A-Za-z0-9]/.test(after) ? " " : "";
+    dict.value = before + sp1 + put + sp2 + after;
+    if (document.activeElement === dict) { const c = before.length + sp1.length + put.length; dict.setSelectionRange(c, c); }
+  } else if (!err) {
+    undoStack.push(v);
+    dict.value = v + put;          // 個記號俾你刪咗（或者復原咗）：加喺最尾
+  }
+  saveDict();
+  if (!/〔⏳\d+〕/.test(dict.value)) dsay(err ? "❌ " + err : "✅ 得咗。可以撳住再講，或者揀起要改嘅字再講一次。");
+  else if (err) dsay("❌ " + err);
+  showSel();
+}
+
+const mic = $("mic");
+const blockDefault = (e) => e.preventDefault();       // 撳個咪唔好令文字框失去焦點／揀咗嘅字
+mic.addEventListener("touchstart", blockDefault, { passive: false });
+mic.addEventListener("mousedown", blockDefault);
+mic.addEventListener("contextmenu", blockDefault);
+mic.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  try { mic.setPointerCapture(e.pointerId); } catch {}
+  if (micState === "recording") { stopRec(); return; }       // 撳一下模式：再撳一下就停
+  if (micState !== "idle") return;
+  pressT = Date.now(); toggleMode = false;
+  startRec();
+});
+const onRelease = () => {
+  if (micState === "starting") { releasedWhileStarting = true; return; }
+  if (micState !== "recording" || toggleMode) return;
+  if (Date.now() - pressT < 400) { toggleMode = true; setMicUI(); return; }    // 撳一下：繼續錄，再撳一下停
+  stopRec();
+};
+mic.addEventListener("pointerup", onRelease);
+mic.addEventListener("pointercancel", () => { if (micState === "recording") stopRec(); else if (micState === "starting") releasedWhileStarting = true; });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    if (micState === "recording") stopRec();
+    if (micStream && micState === "idle") { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  }
+});
+
+showTab(store.get("tab", "dict"));
 loadSettingsUI();
 refreshHistory();
 if (!cc) say("⚠️ 繁體轉換載入唔到（網絡問題？），「系」→「係」照做，其他簡體字未必會轉。重新整理頁面可以再試。", "warn");
