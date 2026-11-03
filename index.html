@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 安全：網頁只可以連去 ElevenLabs（API key 唔會俾人偷偷送去第二度），程式只可以由自己同 jsDelivr 載入 -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src https://api.elevenlabs.io; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scribe">
+<meta name="theme-color" content="#1f6f5c">
+<title>Scribe 逐字稿</title>
+<style>
+  :root {
+    --bg: #f5f4f0; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e1da;
+    --accent: #1f6f5c; --accent-ink: #ffffff; --warn: #a3520b; --bad: #b3261e; --ok: #1f6f5c;
+    --field: #fbfaf7; --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151614; --card: #1f201d; --ink: #ecebe6; --muted: #a09f98; --line: #34352f;
+            --accent: #5fbf9f; --accent-ink: #0d1f19; --warn: #f0a35e; --bad: #ff8a80; --ok: #5fbf9f; --field: #191a17; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.55 -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei UI", "Noto Sans HK", sans-serif;
+         padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px); }
+  main { max-width: 680px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 8px 2px 14px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .5px; }
+  header small { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  label.row { display: block; margin: 12px 0 4px; font-weight: 600; font-size: 15px; }
+  .hint { color: var(--muted); font-size: 13.5px; margin: 4px 0 0; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; font: inherit; color: inherit; background: var(--field); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; }
+  textarea { resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .inline { display: flex; gap: 8px; align-items: center; }
+  .inline > input { flex: 1; }
+  .check { display: inline-flex; align-items: center; gap: 8px; margin: 6px 16px 6px 0; font-size: 15px; user-select: none; }
+  .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+  button, .btn { font: inherit; border: 1px solid var(--line); background: var(--field); color: var(--ink);
+    border-radius: 10px; padding: 10px 14px; cursor: pointer; min-height: 44px; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700;
+    width: 100%; font-size: 17px; padding: 14px; }
+  button.small { min-height: 36px; padding: 6px 10px; font-size: 14px; }
+  button.danger { color: var(--bad); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .btns button { flex: 1 1 auto; }
+  .file-pick { display: block; border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; cursor: pointer; }
+  .file-pick strong { display: block; font-size: 17px; }
+  .file-pick input { display: none; }
+  details > summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::after { content: "＋"; color: var(--muted); }
+  details[open] > summary::after { content: "－"; }
+  .status { margin-top: 12px; white-space: pre-wrap; font-size: 15px; }
+  .status.bad { color: var(--bad); } .status.ok { color: var(--ok); } .status.warn { color: var(--warn); }
+  progress { width: 100%; height: 10px; margin-top: 12px; accent-color: var(--accent); }
+  #out { min-height: 260px; font-size: 15.5px; line-height: 1.7; }
+  .speaker-row { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; align-items: center; margin: 8px 0; }
+  .speaker-row .first { grid-column: 2; color: var(--muted); font-size: 13px; margin-top: -4px; }
+  .hist { list-style: none; padding: 0; margin: 0; }
+  .hist li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .hist li:first-child { border-top: 0; }
+  .hist .meta { flex: 1; min-width: 0; }
+  .hist .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .hist .meta span { color: var(--muted); font-size: 13px; }
+  .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--field); border: 1px solid var(--line); color: var(--muted); }
+  .hidden { display: none !important; }
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 99px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .95; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>📝 Scribe 逐字稿</h1>
+    <small>ElevenLabs Scribe v2</small>
+  </header>
+
+  <!-- ===================== 設定 ===================== -->
+  <details class="card" id="settings">
+    <summary>⚙️ 設定 <span id="keyBadge" class="badge" style="margin-left:auto;margin-right:10px">未有 API key</span></summary>
+
+    <label class="row" for="key">ElevenLabs API key</label>
+    <div class="inline">
+      <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk_…">
+      <button id="showKey" class="small" type="button">顯示</button>
+    </div>
+    <p class="hint">只會儲喺呢部手機嘅瀏覽器（localStorage），只會送去 ElevenLabs，唔會上 GitHub。
+      喺 <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">elevenlabs.io → API keys</a> 開一條新 key，權限只開「Speech to Text」最安全。</p>
+    <div class="btns">
+      <button id="saveKey" type="button">💾 儲存 key</button>
+      <button id="forgetKey" type="button" class="danger">🗑️ 刪除 key</button>
+    </div>
+
+    <label class="row" for="lang">語言</label>
+    <select id="lang">
+      <option value="yue">廣東話</option>
+      <option value="">自動偵測</option>
+    </select>
+
+    <label class="check" style="margin-top:12px"><input type="checkbox" id="trad" checked> 轉做香港繁體（簡體字自動轉、「系」改「係」）</label>
+
+    <label class="row" for="terms">常用關鍵詞（每次都會用）</label>
+    <textarea id="terms" rows="3" placeholder="一行一個，例如：&#10;陳生&#10;WhatsApp&#10;checkout"></textarea>
+    <p class="hint">人名、公司名、英文術語。有關鍵詞 ElevenLabs 會加收約兩成費用。</p>
+
+    <label class="row" for="rules">替換規則（轉完自動換字，免費）</label>
+    <textarea id="rules" rows="3" placeholder="一行一條：錯嘅寫法 → 啱嘅寫法&#10;例如：&#10;check out → checkout&#10;陳先 → 陳生"></textarea>
+    <p class="hint">只適合「一出現就一定係錯」嘅寫法。改完規則，打開舊結果會自動用新規則。</p>
+
+    <div class="btns"><button id="saveSettings" type="button">💾 儲存設定</button></div>
+  </details>
+
+  <!-- ===================== 轉文字 ===================== -->
+  <section class="card">
+    <h2>1. 揀錄音檔</h2>
+    <label class="file-pick" id="pickLabel">
+      <input id="file" type="file" accept="audio/*,video/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.webm,.mp4,.mov,.mkv">
+      <strong id="fileName">📂 撳呢度揀檔案</strong>
+      <span class="hint" id="fileInfo">MP3、M4A（iPhone 語音備忘錄）、WAV、MP4…最大 3 GB</span>
+    </label>
+
+    <label class="row" for="speakers">2. 有幾多個人講嘢</label>
+    <input id="speakers" type="number" inputmode="numeric" min="0" max="32" value="0">
+    <p class="hint">0 = 等佢自己估；知道人數就填，會分得準啲。</p>
+
+    <label class="row" for="extraTerms">今次額外關鍵詞（可以唔填）</label>
+    <input id="extraTerms" type="text" placeholder="用逗號分開，例如：李太, Zoom">
+
+    <div style="margin-top:16px"><button id="go" class="primary" type="button">▶ 開始轉文字</button></div>
+    <div class="btns hidden" id="cancelRow"><button id="cancel" type="button" class="danger">✖ 取消</button></div>
+    <progress id="bar" class="hidden" max="100" value="0"></progress>
+    <div id="status" class="status">揀咗錄音檔就可以開始。</div>
+  </section>
+
+  <!-- ===================== 結果 ===================== -->
+  <section class="card hidden" id="resultCard">
+    <h2 id="resultTitle">結果</h2>
+    <div>
+      <label class="check"><input type="checkbox" id="showTs" checked> 顯示時間</label>
+      <label class="check"><input type="checkbox" id="showSpk" checked> 顯示講者</label>
+    </div>
+    <textarea id="out" readonly></textarea>
+    <div class="btns">
+      <button id="copy" type="button">📋 複製（照上面顯示）</button>
+      <button id="share" type="button" class="hidden">📤 分享</button>
+    </div>
+    <div class="btns">
+      <button id="dlTs" type="button">⬇️ 有時間版 .txt</button>
+      <button id="dlPlain" type="button">⬇️ 冇時間版 .txt</button>
+    </div>
+
+    <details style="margin-top:14px" id="renameBox">
+      <summary>👥 改講者名</summary>
+      <p class="hint">唔改就留空。下面係每個人第一句，方便你認人。</p>
+      <div id="renameRows"></div>
+      <div class="btns"><button id="saveNames" type="button">💾 儲存講者名</button></div>
+    </details>
+
+    <details style="margin-top:10px">
+      <summary>🧩 進階</summary>
+      <p class="hint">「原始結果」可以喺電腦版 Scribe 撳「📂 開返舊結果」打開，用嚟改字同「從改正學習」。</p>
+      <div class="btns"><button id="dlJson" type="button">⬇️ 原始結果 _scribe.json</button></div>
+    </details>
+  </section>
+
+  <!-- ===================== 舊結果 ===================== -->
+  <section class="card">
+    <h2>🗂️ 之前轉過嘅</h2>
+    <ul class="hist" id="hist"></ul>
+    <p class="hint" id="histEmpty">未有。轉完嘅結果會自動儲喺呢部手機，唔使再上載、唔使再俾錢就可以再睇。</p>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<!-- 簡體 → 香港繁體（OpenCC）。integrity 鎖死版本，檔案俾人改過瀏覽器就唔會行 -->
+<script src="https://cdn.jsdelivr.net/npm/opencc-js@1.4.2/dist/umd/cn2t.js"
+        integrity="sha384-yNJOMWWAWjkIS4ac4UuBSUEalVmzrz5LxWE+lviAdQLnHhWKjWuTs5d3ReXvpWU3"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+"use strict";
+const API_URL = "https://api.elevenlabs.io/v1/speech-to-text";
+const PARA_GAP = 3.0;              // 秒：同一個人停頓超過咁耐就開新段落
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------ 儲存（localStorage）
+const store = {
+  get(k, d = "") { try { const v = localStorage.getItem("scribe_" + k); return v === null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("scribe_" + k, v); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem("scribe_" + k); } catch {} },
+};
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+function say(msg, kind = "") { const s = $("status"); s.textContent = msg; s.className = "status " + kind; }
+
+// ------------------------------------------------------------ 繁體
+const HK_COMMON = { "説": "說", "閲": "閱", "脱": "脫", "税": "稅", "鋭": "銳", "悦": "悅", "蜕": "蛻" };
+const KEEP_XI = ["系統", "系列", "系數", "體系", "學系", "系主任", "語系", "派系", "星系", "太陽系", "銀河系", "水系", "父系",
+  "母系", "系譜", "關係", "聯系", "直系", "旁系", "系出", "嫡系", "菌系", "品系", "譜系", "系爭"];
+let cc = null;
+try { cc = window.OpenCC ? OpenCC.Converter({ from: "cn", to: "hk" }) : null; } catch { cc = null; }
+
+function fixXi(t) {
+  let out = "";
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (c === "系" && !KEEP_XI.some((k) => t.slice(Math.max(0, i - k.length + 1), i + k.length).includes(k))) out += "係";
+    else out += c;
+  }
+  return out;
+}
+function toTraditional(t) {
+  if (!t) return t;
+  if (cc) t = cc(t).replace(/[説閲脱税鋭悦蜕]/g, (c) => HK_COMMON[c]);
+  return fixXi(t);
+}
+
+// ------------------------------------------------------------ 關鍵詞、替換規則
+function parseTerms(text) {
+  const terms = (text || "").replace(/[，、\n]/g, ",").split(",").map((t) => t.trim()).filter(Boolean);
+  const bad = terms.filter((t) => t.length >= 50 || t.split(/\s+/).length > 5 || /[<>{}\[\]\\]/.test(t));
+  if (bad.length) throw new Error("呢啲關鍵詞唔得（每個要短過 50 字、最多 5 個英文字、唔可以有 <>{}[]\\）：" + bad.join("、"));
+  return [...new Set(terms)].slice(0, 1000);
+}
+function parseRules(text) {
+  const rules = [];
+  for (const line of (text || "").split("\n")) {
+    const m = line.split(/\s*(?:→|->|=>)\s*/);
+    if (m.length === 2 && m[0].trim() && m[1].trim() && m[0].trim() !== m[1].trim())
+      rules.push({ from: m[0].trim(), to: m[1].trim() });
+  }
+  return rules;
+}
+const CJK = "㐀-鿿豈-﫿";
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function applyRules(text, rules) {
+  // 長嘅先換；唔會將已經啱嘅寫法再換多次（例如 check → checkout）；中英之間自動加空格
+  let n = 0;
+  for (const r of [...rules].sort((a, b) => b.from.length - a.from.length)) {
+    const src = r.from, dst = r.to, before = text, k = dst.indexOf(src);
+    let out = "", last = 0;
+    for (const m of before.matchAll(new RegExp(escRe(src), "g"))) {
+      const s = m.index;
+      if (k >= 0 && before.slice(Math.max(0, s - k), s - k + dst.length) === dst) continue;
+      const pre = /^[A-Za-z0-9]/.test(dst) && s > 0 && new RegExp(`[${CJK}]`).test(before[s - 1]) ? " " : "";
+      const end = s + src.length;
+      const post = /[A-Za-z0-9]$/.test(dst) && end < before.length && new RegExp(`[${CJK}]`).test(before[end]) ? " " : "";
+      out += before.slice(last, s) + pre + dst + post;
+      last = end; n++;
+    }
+    text = out + before.slice(last);
+  }
+  return [text, n];
+}
+
+// ------------------------------------------------------------ 逐字 → 段落
+function clock(sec) {
+  sec = Math.floor(sec);
+  const p = (x) => String(x).padStart(2, "0");
+  return `${p(Math.floor(sec / 3600))}:${p(Math.floor(sec / 60) % 60)}:${p(sec % 60)}`;
+}
+function paragraphs(result) {
+  const names = new Map(), paras = [];
+  let cur = null;
+  for (const w of result.words || []) {
+    if (w.type === "audio_event") continue;
+    const text = w.text || "";
+    if (w.type === "spacing") { if (cur) cur.parts.push(text); continue; }
+    const id = w.speaker_id || "speaker";
+    if (!names.has(id)) names.set(id, `講者 ${names.size + 1}`);
+    const who = names.get(id);
+    const start = Number(w.start) || 0;
+    if (!cur || cur.who !== who || start - cur.end > PARA_GAP) {
+      cur = { start, who, parts: [], end: start };
+      paras.push(cur);
+    }
+    cur.parts.push(text);
+    cur.end = Number(w.end) || start;
+  }
+  let out = paras.map((p) => ({ start: p.start, who: p.who, text: p.parts.join("").trim() })).filter((p) => p.text);
+  if (!out.length && result.text) out = [{ start: 0, who: "", text: result.text.trim() }];
+  return out;
+}
+/** 轉繁體 + 套用規則。返回 { paras, fixed } */
+function processResult(result) {
+  const s = settings();
+  let fixed = 0;
+  const paras = paragraphs(result).map((p) => {
+    let t = s.trad ? toTraditional(p.text) : p.text;
+    if (s.rules.length) { const [t2, n] = applyRules(t, s.rules); t = t2; fixed += n; }
+    return { ...p, text: t };
+  });
+  return { paras, fixed };
+}
+/** 段落 → 文字。ts = 顯示時間；spk = 顯示講者。冇時間嗰陣，同一個人連續講只喺第一段寫名 */
+function render(paras, { ts, spk, names = {} }) {
+  const lines = [];
+  let last = null;
+  for (const p of paras) {
+    const who = (names[p.who] || p.who || "").trim();
+    const label = spk && who ? who + "：" : "";
+    if (ts) lines.push(`[${clock(p.start)}] ${label}${p.text}`);
+    else lines.push((who !== last ? label : "") + p.text);
+    last = who;
+  }
+  return lines.join("\n\n") + "\n";
+}
+
+// ------------------------------------------------------------ 設定介面
+function settings() {
+  let rules = [];
+  try { rules = parseRules(store.get("rules")); } catch {}
+  return { key: store.get("key"), lang: store.get("lang", "yue"), trad: store.get("trad", "1") === "1",
+           terms: store.get("terms"), rules };
+}
+function loadSettingsUI() {
+  const s = settings();
+  $("key").value = s.key;
+  $("lang").value = s.lang;
+  $("trad").checked = s.trad;
+  $("terms").value = s.terms;
+  $("rules").value = store.get("rules");
+  $("showTs").checked = store.get("showTs", "1") === "1";
+  $("showSpk").checked = store.get("showSpk", "1") === "1";
+  refreshKeyBadge();
+  if (!s.key) $("settings").open = true;
+}
+function refreshKeyBadge() {
+  const has = !!store.get("key");
+  $("keyBadge").textContent = has ? "✅ 已有 API key" : "未有 API key";
+}
+$("showKey").onclick = () => {
+  const k = $("key"); const show = k.type === "password";
+  k.type = show ? "text" : "password"; $("showKey").textContent = show ? "隱藏" : "顯示";
+};
+$("saveKey").onclick = () => {
+  const k = $("key").value.trim();
+  if (!k) { toast("未貼 key"); return; }
+  if (!store.set("key", k)) { toast("儲唔到（可能係私密瀏覽模式）"); return; }
+  refreshKeyBadge(); toast("✅ 已儲存 API key");
+};
+$("forgetKey").onclick = () => {
+  if (!confirm("喺呢部手機刪除 API key？")) return;
+  store.del("key"); $("key").value = ""; refreshKeyBadge(); toast("已刪除");
+};
+$("saveSettings").onclick = () => {
+  try { parseTerms($("terms").value); } catch (e) { alert(e.message); return; }
+  const bad = $("rules").value.split("\n").filter((l) => l.trim() && !parseRules(l).length);
+  if (bad.length && !confirm("呢幾行睇唔明（要寫成「錯 → 啱」），會略過：\n\n" + bad.join("\n") + "\n\n照樣儲存？")) return;
+  store.set("lang", $("lang").value);
+  store.set("trad", $("trad").checked ? "1" : "0");
+  store.set("terms", $("terms").value);
+  store.set("rules", $("rules").value);
+  if ($("key").value.trim()) store.set("key", $("key").value.trim());
+  refreshKeyBadge();
+  if (current) { reprocess(); }
+  toast("✅ 設定已儲存");
+};
+
+// ------------------------------------------------------------ 揀檔案
+let file = null;
+$("file").onchange = () => {
+  file = $("file").files[0] || null;
+  if (!file) return;
+  const mb = file.size / 1e6;
+  $("fileName").textContent = "🎧 " + file.name;
+  $("fileInfo").textContent = (mb >= 1 ? mb.toFixed(0) : mb.toFixed(1)) + " MB" + (mb > 3000 ? "　⚠️ 超過 3 GB 上限" : "") + "　（撳呢度可以換）";
+  say("準備好，撳「開始轉文字」。");
+};
+
+// ------------------------------------------------------------ 上載 + 轉文字
+let xhr = null, busy = false, wakeLock = null, timer = null;
+
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+    } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (busy && document.visibilityState === "visible") keepAwake(true); });
+window.addEventListener("beforeunload", (e) => { if (busy) { e.preventDefault(); e.returnValue = ""; } });
+
+function errText(x) {
+  let msg = "";
+  try {
+    const d = JSON.parse(x.responseText).detail;
+    if (typeof d === "string") msg = d;
+    else if (Array.isArray(d)) msg = d.map((v) => v.msg || JSON.stringify(v)).join("；");
+    else if (d) msg = d.message || JSON.stringify(d);
+  } catch {}
+  return `HTTP ${x.status}：${msg || x.statusText || "未知錯誤"}`;
+}
+
+function callApi(key, f, fields, onUp) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    for (const [k, v] of fields) fd.append(k, v);
+    fd.append("file", f, f.name);
+    const x = new XMLHttpRequest();
+    xhr = x;
+    x.open("POST", API_URL);
+    x.setRequestHeader("xi-api-key", key);
+    x.setRequestHeader("Accept", "application/json");
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onUp(e.loaded / e.total); };
+    x.upload.onload = () => onUp(1);
+    x.onload = () => {
+      if (x.status >= 200 && x.status < 300) {
+        try { resolve(JSON.parse(x.responseText)); } catch { reject({ msg: "ElevenLabs 回覆睇唔明（可以再試一次）" }); }
+      } else reject({ status: x.status, msg: errText(x) });
+    };
+    x.onerror = () => reject({ status: 0, msg: "連唔到 ElevenLabs（檢查下網絡；如果中途熄咗 mon 或者轉咗去第二個 app，連線會斷）" });
+    x.onabort = () => reject({ status: -1, msg: "已取消" });
+    x.send(fd);
+  });
+}
+
+$("go").onclick = async () => {
+  if (busy) return;
+  const key = store.get("key") || $("key").value.trim();
+  if (!key) { $("settings").open = true; $("key").focus(); toast("請先喺「設定」貼上 API key"); return; }
+  if (!file) { $("file").click(); return; }
+  if (file.size > 3e9) { alert("檔案超過 3 GB，ElevenLabs 唔收。"); return; }
+  const spk = parseInt($("speakers").value || "0", 10);
+  if (!(spk >= 0 && spk <= 32)) { alert("人數要喺 0 至 32 之間（0 = 等佢自己估）。"); return; }
+  let terms;
+  try { terms = parseTerms(store.get("terms") + "," + $("extraTerms").value); } catch (e) { alert(e.message); return; }
+  if (!cc && settings().trad && !confirm("繁體轉換載入唔到（可能網絡問題），出嚟可能有簡體字。之後喺「之前轉過嘅」再開一次就會轉返。照樣開始？")) return;
+  if (!store.get("key")) store.set("key", key);
+
+  const lang = settings().lang;
+  const fields = (lang) => {
+    const f = [["model_id", "scribe_v2"], ["diarize", "true"], ["tag_audio_events", "false"], ["timestamps_granularity", "word"]];
+    if (lang) f.push(["language_code", lang]);
+    if (spk) f.push(["num_speakers", String(spk)]);
+    for (const t of terms) f.push(["keyterms", t]);
+    return f;
+  };
+
+  busy = true;
+  $("go").disabled = true; $("cancelRow").classList.remove("hidden");
+  const bar = $("bar"); bar.classList.remove("hidden"); bar.value = 0;
+  keepAwake(true);
+  const t0 = Date.now();
+  let phase = "up", upPct = 0;
+  const tick = () => {
+    const el = Math.floor((Date.now() - t0) / 1000);
+    const time = `${Math.floor(el / 60)} 分 ${String(el % 60).padStart(2, "0")} 秒`;
+    if (phase === "up") say(`⏫ 上載緊…${Math.round(upPct * 100)}%（${time}）\n唔好熄 mon、唔好轉去第二個 app。`);
+    else say(`⏳ ElevenLabs 轉緊文字…已經過咗 ${time}\n兩個半鐘嘅錄音大約要幾分鐘到十幾分鐘。唔好熄 mon、唔好轉去第二個 app。`);
+  };
+  timer = setInterval(tick, 1000); tick();
+  const onUp = (p) => {
+    upPct = p;
+    if (p >= 1) { phase = "wait"; bar.removeAttribute("value"); } else bar.value = p * 100;
+    tick();
+  };
+
+  try {
+    let result;
+    try {
+      result = await callApi(key, file, fields(lang), onUp);
+    } catch (e) {
+      if ((e.status === 400 || e.status === 422) && lang && /language/i.test(e.msg)) {
+        say("⚠️ 語言代碼唔被接受，改用自動偵測再試…", "warn");
+        phase = "up"; upPct = 0; bar.value = 0;
+        result = await callApi(key, file, fields(""), onUp);
+      } else throw e;
+    }
+    const rec = { id: Date.now(), name: file.name, date: new Date().toISOString(), size: file.size, result, names: {} };
+    let saved = true;
+    try { await db.put(rec); } catch { saved = false; }
+    openRecord(rec);
+    const mins = ((Date.now() - t0) / 60000).toFixed(1);
+    say(`✅ 完成（${mins} 分鐘）：${countSpeakers(current.paras)} 個講者、${current.paras.length} 段` +
+        (current.fixed ? `、替換規則改咗 ${current.fixed} 處` : "") + "。" +
+        (saved ? "" : "\n⚠️ 呢部手機儲唔到結果（空間唔夠？），記得而家就下載。"), "ok");
+    refreshHistory();
+    $("resultCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    const hint = { 401: "API key 唔啱，或者條 key 冇開 Speech to Text 權限。",
+                   402: "額度唔夠：去 elevenlabs.io/app/subscription 睇下。",
+                   429: "太多請求，或者條 key 嘅用量上限／月費額度用晒。" }[e.status] || "";
+    say((e.status === -1 ? "✖ " : "❌ ") + (e.msg || String(e)) + (hint ? "\n" + hint : ""), e.status === -1 ? "warn" : "bad");
+  } finally {
+    busy = false; xhr = null;
+    clearInterval(timer);
+    $("go").disabled = false; $("cancelRow").classList.add("hidden"); bar.classList.add("hidden");
+    keepAwake(false);
+  }
+};
+$("cancel").onclick = () => {
+  if (xhr && confirm("真係取消？如果已經上載完，ElevenLabs 可能照樣收費。")) xhr.abort();
+};
+
+// ------------------------------------------------------------ 結果顯示
+let current = null;     // { rec, paras, fixed }
+const countSpeakers = (paras) => new Set(paras.map((p) => p.who).filter(Boolean)).size;
+const baseName = (n) => (n || "錄音").replace(/\.[^.]+$/, "");
+
+function openRecord(rec) {
+  const { paras, fixed } = processResult(rec.result);
+  current = { rec, paras, fixed };
+  $("resultTitle").textContent = "📄 " + rec.name;
+  $("resultCard").classList.remove("hidden");
+  buildRename();
+  show();
+}
+function reprocess() { if (current) openRecord(current.rec); }
+function show() {
+  if (!current) return;
+  $("out").value = render(current.paras, { ts: $("showTs").checked, spk: $("showSpk").checked, names: current.rec.names });
+}
+$("showTs").onchange = () => { store.set("showTs", $("showTs").checked ? "1" : "0"); show(); };
+$("showSpk").onchange = () => { store.set("showSpk", $("showSpk").checked ? "1" : "0"); show(); };
+
+$("copy").onclick = async () => {
+  const text = $("out").value;
+  try { await navigator.clipboard.writeText(text); toast("✅ 已複製"); }
+  catch {
+    const o = $("out"); o.removeAttribute("readonly"); o.select(); o.setSelectionRange(0, text.length);
+    const ok = document.execCommand && document.execCommand("copy");
+    o.setAttribute("readonly", ""); toast(ok ? "✅ 已複製" : "複製唔到，請長按文字自己揀");
+  }
+};
+
+function download(name, text, type = "text/plain;charset=utf-8") {
+  const blob = new Blob(["﻿" + text], { type });      // ﻿：Windows 記事本開都唔會亂碼
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const versions = () => ({
+  ts: render(current.paras, { ts: true, spk: $("showSpk").checked, names: current.rec.names }),
+  plain: render(current.paras, { ts: false, spk: $("showSpk").checked, names: current.rec.names }),
+});
+$("dlTs").onclick = () => download(baseName(current.rec.name) + "_逐字稿.txt", versions().ts);
+$("dlPlain").onclick = () => download(baseName(current.rec.name) + "_冇時間.txt", versions().plain);
+$("dlJson").onclick = () => {
+  const blob = new Blob([JSON.stringify(current.rec.result, null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = baseName(current.rec.name) + "_scribe.json"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
+if (navigator.share) {
+  $("share").classList.remove("hidden");
+  $("share").onclick = async () => {
+    const text = $("out").value;
+    const name = baseName(current.rec.name) + ($("showTs").checked ? "_逐字稿.txt" : "_冇時間.txt");
+    try {
+      const f = new File(["﻿" + text], name, { type: "text/plain" });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: name });
+      else await navigator.share({ text, title: name });
+    } catch (e) { if (e.name !== "AbortError") toast("分享唔到"); }
+  };
+}
+
+// ------------------------------------------------------------ 改講者名
+function buildRename() {
+  const box = $("renameRows"); box.innerHTML = "";
+  const first = new Map();
+  for (const p of current.paras) if (p.who && !first.has(p.who)) first.set(p.who, p.text);
+  $("renameBox").classList.toggle("hidden", !first.size);
+  for (const [who, line] of first) {
+    const row = document.createElement("div"); row.className = "speaker-row";
+    const lab = document.createElement("span"); lab.textContent = who;
+    const inp = document.createElement("input"); inp.type = "text"; inp.dataset.who = who;
+    inp.placeholder = "例如：陳生"; inp.value = current.rec.names[who] || "";
+    const fl = document.createElement("span"); fl.className = "first";
+    fl.textContent = "「" + line.slice(0, 30) + (line.length > 30 ? "…" : "") + "」";
+    row.append(lab, inp, fl); box.appendChild(row);
+  }
+}
+$("saveNames").onclick = async () => {
+  const names = {};
+  for (const inp of $("renameRows").querySelectorAll("input")) {
+    const v = inp.value.trim().replace(/[：:]/g, "");
+    if (v) names[inp.dataset.who] = v;
+  }
+  current.rec.names = names;
+  try { await db.put(current.rec); } catch {}
+  show(); refreshHistory(); toast("✅ 已改講者名");
+};
+
+// ------------------------------------------------------------ 舊結果（IndexedDB，儲喺呢部手機）
+const db = {
+  _db: null,
+  open() {
+    if (this._db) return Promise.resolve(this._db);
+    return new Promise((res, rej) => {
+      const r = indexedDB.open("scribe", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("jobs", { keyPath: "id" });
+      r.onsuccess = () => { this._db = r.result; res(r.result); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  async tx(mode, fn) {
+    const d = await this.open();
+    return new Promise((res, rej) => {
+      const t = d.transaction("jobs", mode), s = t.objectStore("jobs");
+      const r = fn(s);
+      t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  },
+  put(rec) { return this.tx("readwrite", (s) => s.put(rec)); },
+  del(id) { return this.tx("readwrite", (s) => s.delete(id)); },
+  get(id) { return this.tx("readonly", (s) => s.get(id)); },
+  async list() {
+    const d = await this.open();
+    return new Promise((res, rej) => {
+      const out = [], r = d.transaction("jobs").objectStore("jobs").openCursor(null, "prev");
+      r.onsuccess = () => { const c = r.result; if (c) { const v = c.value; out.push({ id: v.id, name: v.name, date: v.date, size: v.size,
+        dur: (v.result && v.result.words && v.result.words.length) ? v.result.words[v.result.words.length - 1].end : 0 }); c.continue(); } else res(out); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+};
+async function refreshHistory() {
+  let items = [];
+  try { items = await db.list(); } catch {}
+  const ul = $("hist"); ul.innerHTML = "";
+  $("histEmpty").classList.toggle("hidden", items.length > 0);
+  for (const it of items) {
+    const li = document.createElement("li");
+    const meta = document.createElement("div"); meta.className = "meta";
+    const b = document.createElement("b"); b.textContent = it.name;
+    const sp = document.createElement("span");
+    const d = new Date(it.date);
+    sp.textContent = d.toLocaleString("zh-HK", { dateStyle: "medium", timeStyle: "short" }) + (it.dur ? "　·　" + clock(it.dur) : "");
+    meta.append(b, sp);
+    const open = document.createElement("button"); open.className = "small"; open.textContent = "打開";
+    open.onclick = async () => {
+      const rec = await db.get(it.id);
+      if (rec) { openRecord(rec); say("已經打開舊結果（用最新設定同替換規則）。", "ok"); $("resultCard").scrollIntoView({ behavior: "smooth" }); }
+    };
+    const del = document.createElement("button"); del.className = "small danger"; del.textContent = "刪除";
+    del.onclick = async () => {
+      if (!confirm(`刪除「${it.name}」嘅結果？（只係喺呢部手機刪除）`)) return;
+      await db.del(it.id);
+      if (current && current.rec.id === it.id) { current = null; $("resultCard").classList.add("hidden"); }
+      refreshHistory();
+    };
+    li.append(meta, open, del); ul.appendChild(li);
+  }
+}
+
+loadSettingsUI();
+refreshHistory();
+if (!cc) say("⚠️ 繁體轉換載入唔到（網絡問題？），「系」→「係」照做，其他簡體字未必會轉。重新整理頁面可以再試。", "warn");
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+</script>
+</body>
+</html>
