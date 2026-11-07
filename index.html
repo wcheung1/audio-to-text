@@ -99,6 +99,29 @@
   .mic.rec { background: #c62828; color: #fff; transform: scale(1.08); animation: pulse 1.2s infinite; }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(198,40,40,.5); } 100% { box-shadow: 0 0 0 22px rgba(198,40,40,0); } }
   #dict { min-height: 220px; font-size: 17px; line-height: 1.7; }
+  /* 思想提示器 */
+  .tabs button { font-size: 14.5px; padding: 8px 4px; }
+  #tGo.on { background: #c62828; border-color: #c62828; color: #fff; }
+  .frame { margin: 14px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); padding: 8px 12px; font-size: 14.5px; }
+  .frame div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 4px 0; }
+  .frame div + div { border-top: 1px dashed var(--line); }
+  .frame span { color: var(--ink); }
+  .frame span.empty { color: var(--muted); font-style: italic; }
+  .pts-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .points { position: relative; list-style: none; padding: 0; margin: 0; }
+  .points li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 6px 10px 10px; margin-bottom: 8px; border-radius: 12px;
+    background: var(--field); border: 1px solid var(--line); border-left: 4px solid var(--accent); transition: transform .35s ease; font-size: 16px; line-height: 1.5; }
+  .points li.top { font-weight: 700; border-left-color: #d9822b; }
+  .points li .k { flex: none; }
+  .points li .t { flex: 1; }
+  .points li .done { flex: none; min-height: 34px; min-width: 40px; padding: 2px 8px; font-size: 15px; }
+  .points li.fresh { animation: fresh 1.4s ease; }
+  @keyframes fresh { 0% { opacity: 0; transform: translateY(-6px); background: rgba(31,111,92,.18); } 25% { opacity: 1; transform: none; } 100% { } }
+  .points li.leaving { position: absolute; left: 0; right: 0; pointer-events: none; animation: leave .45s ease forwards; z-index: 0; }
+  @keyframes leave { to { opacity: 0; transform: translateX(48px); } }
+  .ttext { max-height: 42vh; overflow-y: auto; white-space: pre-wrap; font-size: 16px; line-height: 1.75; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--field); }
+  .ttext .partial { color: var(--muted); }
   .subhead { font-size: 16px; margin: 26px 0 4px; padding-top: 16px; border-top: 1px solid var(--line); }
   code { font-size: 12.5px; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; word-break: break-all; }
   #dict[readonly] { opacity: .85; }
@@ -186,8 +209,45 @@
 
   <nav class="tabs">
     <button type="button" id="tabBtnDict">🎙️ 講嘢打字</button>
-    <button type="button" id="tabBtnFile">📁 錄音檔轉文字</button>
+    <button type="button" id="tabBtnThink">💡 思想提示器</button>
+    <button type="button" id="tabBtnFile">📁 錄音檔</button>
   </nav>
+
+  <!-- ===================== 思想提示器 ===================== -->
+  <div id="tabThink" class="hidden">
+  <section class="card">
+    <button id="tGo" class="primary" type="button">▶ 開始諗嘢</button>
+    <div id="tStatus" class="hint" style="text-align:center;margin-top:8px">一路諗一路講：你講嘅嘢即時出字，AI 喺旁邊即時提你未諗到嘅嘢。</div>
+
+    <div class="frame" id="tFrame">
+      <div><b>🎯 目標</b><span data-k="goal"></span></div>
+      <div><b>🏁 要達成</b><span data-k="outcomes"></span></div>
+      <div><b>🛠️ 方法</b><span data-k="means"></span></div>
+    </div>
+
+    <div class="pts-head">
+      <h2 style="margin:0">💡 你可能未諗到</h2>
+      <span id="tAi" class="hint" style="margin:0"></span>
+    </div>
+    <ul id="tPoints" class="points"></ul>
+    <p class="hint" id="tPointsEmpty">開始講嘢之後，AI 會喺度列出你未諗到嘅嘢，最重要嘅擺最上面。你講咗或者諗過嗰點，佢會自己消失；你亦可以撳 ✓ 剔走。</p>
+    <div class="btns">
+      <button id="tRefresh" type="button" class="small">↻ 即刻再諗</button>
+      <button id="tCopyPts" type="button" class="small">📋 複製提示</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>🗣️ 你講過嘅嘢</h2>
+    <div id="tText" class="ttext"><span class="hint">（未有）</span></div>
+    <div class="btns">
+      <button id="tCopyText" type="button" class="small">📋 複製逐字稿</button>
+      <button id="tDl" type="button" class="small">⬇️ 下載成份 .txt</button>
+      <button id="tNew" type="button" class="small danger">🗑️ 開新一節</button>
+    </div>
+    <p class="hint">會用到 ElevenLabs 即時轉文字（按講嘢時間計）同埋 AI（大約每幾秒分析一次）。內容自動儲喺呢部手機。用緊嘅時候唔好熄 mon、唔好轉 app。</p>
+  </section>
+  </div>
 
   <!-- ===================== 講嘢打字 ===================== -->
   <div id="tabDict">
@@ -327,9 +387,15 @@ function fixXi(t) {
   }
   return out;
 }
+// OpenCC 將「冲」一律轉「衝」，但香港寫法係「沖涼、沖咖啡、手沖」
+const CHONG_FIX = [["手衝", "手沖"], ["衝涼", "沖涼"], ["衝咖啡", "沖咖啡"], ["衝茶", "沖茶"], ["衝奶", "沖奶"], ["衝水", "沖水"],
+  ["衝廁", "沖廁"], ["衝曬", "沖曬"], ["衝洗", "沖洗"], ["衝走", "沖走"], ["衝淡", "沖淡"], ["衝泡", "沖泡"]];
 function toTraditional(t) {
   if (!t) return t;
-  if (cc) t = cc(t).replace(/[説閲脱税鋭悦蜕]/g, (c) => HK_COMMON[c]);
+  if (cc) {
+    t = cc(t).replace(/[説閲脱税鋭悦蜕]/g, (c) => HK_COMMON[c]);
+    if (t.includes("衝")) for (const [a, b] of CHONG_FIX) t = t.split(a).join(b);
+  }
   return fixXi(t);
 }
 
@@ -502,28 +568,31 @@ const aiReady = () => { const a = aiSettings(); return !!(a.key && a.base && a.m
 
 async function aiPolish(text) {
   const a = aiSettings();
+  let terms = [];
+  try { terms = parseTerms(settings().terms); } catch {}
+  return aiChat([
+    { role: "system", content: a.prompt + (terms.length ? "\n\n用戶常用嘅專有名詞（寫法以呢度為準）：" + terms.join("、") : "") },
+    { role: "user", content: text },
+  ], { temperature: 0.3 });
+}
+/** 叫 OpenAI-compatible 嘅 AI，返回佢講嘅文字 */
+async function aiChat(messages, { temperature = 0.3, maxTokens = 0, timeoutMs = 90000 } = {}) {
+  const a = aiSettings();
   if (!a.key) throw new Error("未設定 AI API key");
   let url = a.base.trim().replace(/\/+$/, "");
   if (!/^https:\/\//i.test(url)) throw new Error("Base URL 要用 https:// 開頭");
   if (!/\/chat\/completions$/.test(url)) url += "/chat/completions";
-  let terms = [];
-  try { terms = parseTerms(settings().terms); } catch {}
-  const body = {
-    model: a.model.trim(), temperature: 0.3, stream: false,
-    messages: [
-      { role: "system", content: a.prompt + (terms.length ? "\n\n用戶常用嘅專有名詞（寫法以呢度為準）：" + terms.join("、") : "") },
-      { role: "user", content: text },
-    ],
-  };
+  const body = { model: a.model.trim(), temperature, stream: false, messages };
+  if (maxTokens) body.max_tokens = maxTokens;
   // z.ai／智譜：關咗「思考」，快好多（其他 AI 唔識呢個參數，所以唔加）
   if (/^https:\/\/([a-z0-9-]+\.)*(z\.ai|bigmodel\.cn)\//i.test(url)) body.thinking = { type: "disabled" };
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 90000);
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), timeoutMs);
   let r;
   try {
     r = await fetch(url, { method: "POST", signal: ctl.signal,
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + a.key.trim() }, body: JSON.stringify(body) });
   } catch (e) {
-    throw new Error(e.name === "AbortError" ? "等咗 90 秒都冇回覆" : "連唔到 AI（檢查下 Base URL 同網絡）");
+    throw new Error(e.name === "AbortError" ? `等咗 ${timeoutMs / 1000} 秒都冇回覆` : "連唔到 AI（檢查下 Base URL 同網絡）");
   } finally { clearTimeout(timer); }
   const raw = await r.text();
   let j = null;
@@ -897,13 +966,15 @@ async function refreshHistory() {
 
 // ------------------------------------------------------------ 分頁
 function showTab(name) {
-  $("tabDict").classList.toggle("hidden", name !== "dict");
-  $("tabFile").classList.toggle("hidden", name !== "file");
-  $("tabBtnDict").classList.toggle("on", name === "dict");
-  $("tabBtnFile").classList.toggle("on", name === "file");
+  for (const t of ["dict", "think", "file"]) {
+    const cap = t[0].toUpperCase() + t.slice(1);
+    $("tab" + cap).classList.toggle("hidden", name !== t);
+    $("tabBtn" + cap).classList.toggle("on", name === t);
+  }
   store.set("tab", name);
 }
 $("tabBtnDict").onclick = () => showTab("dict");
+$("tabBtnThink").onclick = () => showTab("think");
 $("tabBtnFile").onclick = () => showTab("file");
 
 // ------------------------------------------------------------ 熄 mon 提示（只喺手機顯示）
@@ -974,7 +1045,7 @@ async function getMic() {
 function releaseMicLater() {      // 停咗 1 分鐘就熄咪（手機頂嗰粒「用緊咪」燈會熄）
   clearTimeout(releaseTimer);
   releaseTimer = setTimeout(() => {
-    if (micState === "idle" && micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    if (micState === "idle" && !T.running && micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
   }, 60000);
 }
 function setMicUI() {
@@ -994,6 +1065,7 @@ async function startRec() {
     alert("呢個瀏覽器唔支援錄音。iPhone 請用 Safari（iOS 14.3 或以上），Android 請用 Chrome。"); return;
   }
   if (!s.key) { $("settings").open = true; toast("請先喺「設定」貼上 API key"); $("settings").scrollIntoView({ behavior: "smooth" }); return; }
+  if (T.running) { toast("思想提示器用緊個咪，暫停咗佢先"); return; }
   target = currentSel();
   micState = "starting"; releasedWhileStarting = false; setMicUI();
   let ac = null;
@@ -1313,9 +1385,335 @@ mic.addEventListener("pointercancel", () => { if (micState === "recording") stop
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     if (micState === "recording") stopRec();
-    if (micStream && micState === "idle") { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    if (T.running) thinkStop("⏸ 暫停咗（熄咗 mon 或者轉咗 app）。撳「▶ 繼續諗」再講。");
+    if (micStream && micState === "idle" && !T.running) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
   }
 });
+
+// ============================================================ 💡 思想提示器
+// 一路講：ElevenLabs 即時轉文字（連線斷咗會自動駁返）；同一時間 AI 每幾秒睇一次你講過嘅嘢，提你未諗到嘅嘢
+const THINK_PROMPT = `你係「思想提示器」。用戶一路諗嘢一路講（廣東話口述，經語音轉文字，可能有錯字或者斷句怪），你喺旁邊即時幫佢補漏，等佢可以通盤考慮成個大局。
+
+你要做：
+1. 由佢講過嘅嘢推斷：佢嘅「目標」（最終想點）、「要達成」（具體要有咩結果、點先算成功）、「方法」（打算點做）。佢未講清楚就留空字串，唔好自己作。
+2. 列出佢未諗到、但對成件事重要嘅提示，最多 6 個，最重要排第一。特別留意：
+   - 目標未清楚：問佢真正想要乜
+   - 冇講要達成乜、點樣量度成功：提佢
+   - 有目標但未有方法，或者漏咗明顯更好／必要嘅方法：提佢
+   - 由佢已經提過嘅方向出發，再諗：風險、資源（錢、時間、人）、牽涉嘅人、限期、第一步做乜
+3. 佢已經講過、考慮過（包括講咗唔做）嘅，唔好再列；「現有提示」入面佢已經回應咗嘅，就刪走。
+4. 「現有提示」仲未處理嘅，保留原本 id 同寫法（唔好為改而改）；新提示 id 寫 "new"。
+5. 每個提示一句，最多 30 個字，用廣東話口語，要具體、同佢講緊嘅題目直接有關，佢一睇就可以即刻諗（唔好空泛，例如唔好寫「考慮風險」，要寫「如果供應商遲交貨，你有冇後備？」）。
+6. k 係類別：goal（目標）、result（要達成）、means（方法）、risk（風險）、people（人）、next（下一步）、other。
+
+只輸出一個 JSON，唔好有其他字：
+{"frame":{"goal":"","outcomes":"","means":""},"points":[{"id":"p1","k":"means","text":"……"}]}`;
+const KIND_ICON = { goal: "🎯", result: "🏁", means: "🛠️", risk: "⚠️", people: "👥", next: "👣", other: "💡" };
+const tJSON = (k, d) => { try { return JSON.parse(store.get(k)) || d; } catch { return d; } };
+const T = {
+  running: false, stopping: false, gen: 0, ws: null, ready: false, queue: [], retries: 0, audio: null, tick: null,
+  text: store.get("think_text"), partial: "", lastCommitAt: 0,
+  points: tJSON("think_points", []), frame: tJSON("think_frame", {}), dismissed: tJSON("think_dismissed", []),
+  pid: 0, inFlight: false, again: false, lastAnalyzed: "", lastAiStart: 0, anTimer: null,
+};
+T.pid = T.points.reduce((m, p) => Math.max(m, parseInt(String(p.id).slice(1), 10) || 0), 0);
+const tSave = () => {
+  store.set("think_text", T.text); store.set("think_points", JSON.stringify(T.points));
+  store.set("think_frame", JSON.stringify(T.frame)); store.set("think_dismissed", JSON.stringify(T.dismissed.slice(-40)));
+};
+const tStatus = (m) => { $("tStatus").textContent = m; };
+const tAi = (m) => { $("tAi").textContent = m; };
+
+// ---------- 畫面
+function tRenderText() {
+  const box = $("tText");
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  box.textContent = "";
+  if (!T.text && !T.partial) { box.innerHTML = '<span class="hint">（未有）</span>'; return; }
+  box.appendChild(document.createTextNode(T.text));
+  if (T.partial) {
+    const sp = document.createElement("span"); sp.className = "partial";
+    const pt = settings().trad ? toTraditional(T.partial) : T.partial;
+    sp.textContent = (/[A-Za-z0-9.,!?]$/.test(T.text) && /^[A-Za-z0-9]/.test(pt) ? " " : "") + pt;
+    box.appendChild(sp);
+  }
+  if (nearBottom) box.scrollTop = box.scrollHeight;
+}
+function tRenderFrame() {
+  for (const sp of $("tFrame").querySelectorAll("span[data-k]")) {
+    const v = (T.frame && T.frame[sp.dataset.k] || "").trim();
+    sp.textContent = v || "（未講清楚）";
+    sp.classList.toggle("empty", !v);
+  }
+}
+function tMakeLi(p) {
+  const li = document.createElement("li"); li.dataset.id = p.id;
+  const k = document.createElement("span"); k.className = "k";
+  const t = document.createElement("span"); t.className = "t";
+  const done = document.createElement("button"); done.className = "done small"; done.type = "button"; done.textContent = "✓"; done.title = "諗過喇";
+  done.onclick = () => tDismiss(p.id);
+  li.append(k, t, done);
+  tUpdateLi(li, p);
+  return li;
+}
+function tUpdateLi(li, p) {
+  li.querySelector(".k").textContent = KIND_ICON[p.k] || KIND_ICON.other;
+  const t = li.querySelector(".t");
+  if (t.textContent !== p.text) t.textContent = p.text;
+}
+/** 更新提示清單：消失嘅淡出，其他滑上去補位，新嘅淡入（FLIP 動畫） */
+function tRenderPoints() {
+  const ul = $("tPoints");
+  const old = new Map([...ul.querySelectorAll("li:not(.leaving)")].map((li) => [li.dataset.id, li]));
+  const top0 = new Map([...old].map(([id, li]) => [id, li.offsetTop]));
+  const keep = new Set(T.points.map((p) => p.id));
+  for (const [id, li] of old) {
+    if (keep.has(id)) continue;
+    li.style.top = li.offsetTop + "px";
+    li.classList.add("leaving");
+    setTimeout(() => li.remove(), 500);
+  }
+  for (const p of T.points) {
+    let li = old.get(p.id);
+    if (li) tUpdateLi(li, p);
+    else { li = tMakeLi(p); li.classList.add("fresh"); setTimeout(() => li.classList.remove("fresh"), 1500); }
+    li.classList.toggle("top", p === T.points[0]);
+    ul.appendChild(li);
+  }
+  for (const p of T.points) {
+    const li = old.get(p.id);
+    if (!li || !top0.has(p.id)) continue;
+    const dy = top0.get(p.id) - li.offsetTop;
+    if (!dy) continue;
+    li.style.transition = "none"; li.style.transform = `translateY(${dy}px)`;
+    void li.offsetHeight;
+    li.style.transition = ""; li.style.transform = "";
+  }
+  $("tPointsEmpty").classList.toggle("hidden", T.points.length > 0);
+}
+function tDismiss(id) {
+  const p = T.points.find((x) => x.id === id);
+  if (!p) return;
+  T.dismissed.push(p.text);
+  T.points = T.points.filter((x) => x.id !== id);
+  tRenderPoints(); tSave();
+  tScheduleAnalyze(400, true);          // 補返一個上嚟
+}
+
+// ---------- 逐字稿
+function tAppend(seg) {
+  seg = (seg || "").trim();
+  if (!seg) return;
+  const s = settings();
+  if (s.trad) seg = toTraditional(seg);
+  if (s.rules.length) seg = applyRules(seg, s.rules)[0];
+  const now = Date.now();
+  if (T.text && T.lastCommitAt && now - T.lastCommitAt > 8000 && !/\n$/.test(T.text)) T.text += "\n\n";   // 停咗一陣：開新段
+  T.text = /\n$/.test(T.text) || !T.text ? T.text + seg : joinSeg(T.text, seg);
+  T.lastCommitAt = now;
+}
+function tCommitPartial() { if (T.partial) { tAppend(T.partial); T.partial = ""; } }
+
+// ---------- 錄音 + 即時轉文字
+function tSend(pcm, commit = false) {
+  const msg = JSON.stringify({ message_type: "input_audio_chunk", audio_base_64: b64(pcm), commit, sample_rate: 16000 });
+  if (T.ready && T.ws && T.ws.readyState === 1) T.ws.send(msg);
+  else { T.queue.push(msg); if (T.queue.length > 400) T.queue.shift(); }      // 斷線期間最多留約半分鐘聲
+}
+async function tConnect() {
+  const gen = ++T.gen;
+  T.ready = false;
+  if (T.ws) { T.ws.onclose = null; T.ws.onmessage = null; try { T.ws.close(); } catch {} T.ws = null; }
+  const s = settings();
+  const retry = (why) => {
+    if (!T.running || T.stopping || gen !== T.gen) return;
+    tCommitPartial(); tRenderText(); tSave();
+    T.retries++;
+    if (T.retries > 6) { thinkStop("❌ 即時轉文字連線斷咗好多次（" + why + "）。檢查下網絡再撳「▶ 繼續諗」。"); return; }
+    tStatus(`🔄 重新連線緊…（${why}）`);
+    setTimeout(() => { if (T.running && gen === T.gen) tConnect(); }, Math.min(6000, 700 * T.retries));
+  };
+  try {
+    const r = await fetch(RT_TOKEN_URL, { method: "POST", headers: { "xi-api-key": s.key } });
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 402 || r.status === 403) {
+        thinkStop(`❌ ElevenLabs 唔俾即時轉文字（HTTP ${r.status}）：` + (r.status === 402 ? "額度唔夠。" : "檢查下 API key 有冇開 Speech to Text 權限。"));
+        return;
+      }
+      throw new Error("HTTP " + r.status);
+    }
+    const { token } = await r.json();
+    if (!T.running || gen !== T.gen) return;
+    const q = new URLSearchParams({ model_id: "scribe_v2_realtime", token, audio_format: "pcm_16000", commit_strategy: "vad" });
+    if (s.lang) q.set("language_code", s.lang);
+    try { for (const t of parseTerms(s.terms)) q.append("keyterms", t); } catch {}
+    const ws = new WebSocket(RT_WS_URL + "?" + q);
+    T.ws = ws;
+    ws.onmessage = (ev) => {
+      if (gen !== T.gen) return;
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      const t = m.message_type || "";
+      if (t === "session_started") {
+        T.ready = true; T.retries = 0;
+        for (const x of T.queue) ws.send(x);
+        T.queue = [];
+        if (T.running && !T.stopping) tStatus("🔴 聽緊…講嘢就會出字。");
+      } else if (t === "partial_transcript") { T.partial = m.text || ""; tRenderText(); }
+      else if (t === "committed_transcript") {
+        T.partial = ""; tAppend(m.text); tRenderText(); tSave();
+        if (T.onCommit) T.onCommit();
+        tScheduleAnalyze(700);
+      } else if (t === "auth_error" || t === "quota_exceeded" || t === "unaccepted_terms") {
+        thinkStop("❌ ElevenLabs：" + (m.error || t));
+      } else if (t === "session_time_limit_exceeded") { try { ws.close(); } catch {} }
+      else if (m.error && !/commit_throttled|insufficient_audio_activity/.test(t)) tStatus("⚠️ " + t + "：" + m.error);
+    };
+    ws.onclose = (ev) => { if (gen === T.gen) retry(ev.reason || "連線閂咗"); };
+  } catch (e) { retry(e.message || "連唔到"); }
+}
+
+async function thinkStart() {
+  const s = settings();
+  if (!s.key) { $("settings").open = true; toast("請先喺「設定」貼上 ElevenLabs API key"); return; }
+  if (micState !== "idle") { toast("講嘢打字用緊個咪"); return; }
+  if (!AC || !window.WebSocket || !navigator.mediaDevices) { alert("呢個瀏覽器唔支援。iPhone 請用 Safari，Android 請用 Chrome。"); return; }
+  let ac;
+  try { ac = new AC(); if (ac.resume) ac.resume(); } catch { alert("開唔到聲音處理"); return; }   // iPhone：要喺撳落去嗰下開
+  let stream;
+  try { stream = await getMic(); }
+  catch (e) {
+    ac.close().catch(() => {});
+    tStatus(e && e.name === "NotAllowedError" ? "❌ 未俾權限用咪（iPhone：設定 → Safari → 麥克風）" : "❌ 開唔到咪：" + (e && e.message || e));
+    return;
+  }
+  clearTimeout(releaseTimer);
+  T.running = true; T.stopping = false; T.retries = 0; T.queue = [];
+  const A = T.audio = { ac, src: ac.createMediaStreamSource(stream), proc: ac.createScriptProcessor(4096, 1, 1), mute: ac.createGain() };
+  A.mute.gain.value = 0;
+  A.src.connect(A.proc); A.proc.connect(A.mute); A.mute.connect(ac.destination);
+  A.proc.onaudioprocess = (e) => { if (T.running && !T.stopping) tSend(toPcm16(e.inputBuffer.getChannelData(0), ac.sampleRate)); };
+  $("tGo").textContent = "⏸ 暫停"; $("tGo").classList.add("on");
+  tStatus("⏳ 連緊…（可以開始講，唔會漏）");
+  if (!aiReady()) tAi("（未設定 AI：只會出字。去「⚙️ 設定 → ✨ AI 修飾」貼 AI key）");
+  const awake = await keepAwake(true);
+  if (!awake && isPhone()) toast("⚠️ 呢部手機唔俾網頁控制熄 mon，記得調長「自動鎖定」");
+  T.tick = setInterval(() => { if (T.running) tScheduleAnalyze(0); }, 5000);      // 講緊長句（未斷句）都會分析
+  tConnect();
+}
+async function thinkStop(msg) {
+  if (!T.running || T.stopping) return;
+  T.stopping = true;
+  clearInterval(T.tick);
+  const A = T.audio;
+  if (A) { try { A.proc.onaudioprocess = null; A.src.disconnect(); A.proc.disconnect(); A.mute.disconnect(); A.ac.close(); } catch {} }
+  T.audio = null;
+  $("tGo").disabled = true; tStatus("⏳ 執緊尾…");
+  if (T.ready && T.ws && T.ws.readyState === 1) {           // 叫佢交埋最後嗰句
+    const got = new Promise((res) => { T.onCommit = res; });
+    try { T.ws.send(JSON.stringify({ message_type: "input_audio_chunk", audio_base_64: b64(new Int16Array(1600)), commit: true, sample_rate: 16000 })); } catch {}
+    await Promise.race([got, sleep(2500)]);
+  }
+  T.onCommit = null;
+  T.gen++;
+  if (T.ws) { T.ws.onclose = null; T.ws.onmessage = null; try { T.ws.close(); } catch {} T.ws = null; }
+  T.ready = false; T.queue = [];
+  tCommitPartial(); tRenderText(); tSave();
+  T.running = false; T.stopping = false;
+  $("tGo").disabled = false; $("tGo").textContent = "▶ 繼續諗"; $("tGo").classList.remove("on");
+  tStatus(msg || "⏸ 暫停咗。撳「▶ 繼續諗」再講。");
+  keepAwake(false); releaseMicLater();
+  tScheduleAnalyze(0);
+}
+$("tGo").onclick = () => { if (T.running) thinkStop(); else thinkStart(); };
+
+// ---------- AI 同步分析
+function tScheduleAnalyze(delay, force = false) {
+  if (force) T.force = true;
+  clearTimeout(T.anTimer);
+  T.anTimer = setTimeout(tAnalyze, delay);
+}
+async function tAnalyze() {
+  if (T.inFlight) { T.again = true; return; }
+  const wait = 3000 - (Date.now() - T.lastAiStart);                 // 最快 3 秒一次
+  if (wait > 0) { clearTimeout(T.anTimer); T.anTimer = setTimeout(tAnalyze, wait); return; }
+  const partial = T.partial ? (settings().trad ? toTraditional(T.partial) : T.partial) : "";
+  const text = joinSeg(T.text, partial).trim();
+  if (text.replace(/\s/g, "").length < 8) return;
+  if (text === T.lastAnalyzed && !T.force) return;
+  if (!aiReady()) { tAi("（未設定 AI：去「⚙️ 設定 → ✨ AI 修飾」貼 AI key）"); return; }
+  T.inFlight = true; T.force = false; T.lastAnalyzed = text; T.lastAiStart = Date.now();
+  tAi("🤔 諗緊…");
+  const shown = text.length > 7000 ? "……（前面略）" + text.slice(-7000) : text;
+  const cur = T.points.map((p) => `${p.id}: ${p.text}`).join("\n") || "（冇）";
+  const dis = T.dismissed.slice(-20).map((d) => "- " + d).join("\n") || "（冇）";
+  let terms = []; try { terms = parseTerms(settings().terms); } catch {}
+  try {
+    const out = await aiChat([
+      { role: "system", content: THINK_PROMPT + (terms.length ? "\n\n用戶常用嘅專有名詞：" + terms.join("、") : "") },
+      { role: "user", content: `【用戶講過嘅嘢（語音轉文字）】\n${shown}\n\n【現有提示（由重要到唔重要）】\n${cur}\n\n【用戶已經撳咗「諗過」嘅提示（唔好再提類似嘅）】\n${dis}` },
+    ], { temperature: 0.4, maxTokens: 900, timeoutMs: 45000 });
+    tApply(out);
+    tAi("✓ " + new Date().toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+  } catch (e) {
+    tAi("⚠️ " + e.message);
+  } finally {
+    T.inFlight = false;
+    if (T.again) { T.again = false; tScheduleAnalyze(200); }
+  }
+}
+function tApply(out) {
+  const s = out.replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a < 0 || b <= a) throw new Error("AI 回覆唔係 JSON");
+  const j = JSON.parse(s.slice(a, b + 1));
+  if (j.frame && typeof j.frame === "object") {
+    const f = (v) => Array.isArray(v) ? v.join("；") : String(v || "");
+    T.frame = { goal: f(j.frame.goal), outcomes: f(j.frame.outcomes), means: f(j.frame.means) };
+  }
+  if (Array.isArray(j.points)) {
+    const known = new Set(T.points.map((p) => p.id)), used = new Set();
+    const dis = new Set(T.dismissed);
+    T.points = j.points
+      .filter((p) => p && typeof p.text === "string" && p.text.trim() && !dis.has(p.text.trim()))
+      .slice(0, 6)
+      .map((p) => {
+        let id = String(p.id || "");
+        if (!known.has(id) || used.has(id)) id = "p" + (++T.pid);
+        used.add(id);
+        return { id, k: KIND_ICON[p.k] ? p.k : "other", text: p.text.trim() };
+      });
+  }
+  tRenderFrame(); tRenderPoints(); tSave();
+}
+$("tRefresh").onclick = () => { T.lastAiStart = 0; tScheduleAnalyze(0, true); };
+
+// ---------- 複製、下載、開新一節
+function tExport() {
+  const f = T.frame || {};
+  const when = new Date().toLocaleString("zh-HK", { dateStyle: "medium", timeStyle: "short" });
+  return `思想提示器　${when}\n\n🎯 目標：${f.goal || "（未講清楚）"}\n🏁 要達成：${f.outcomes || "（未講清楚）"}\n🛠️ 方法：${f.means || "（未講清楚）"}\n\n` +
+    `💡 未處理嘅提示：\n${T.points.map((p) => "• " + p.text).join("\n") || "（冇）"}\n\n🗣️ 逐字稿：\n${T.text}\n`;
+}
+async function tCopy(text) {
+  if (!text.trim()) { toast("未有內容"); return; }
+  try { await navigator.clipboard.writeText(text); toast("✅ 已複製"); } catch { toast("複製唔到"); }
+}
+$("tCopyPts").onclick = () => tCopy(T.points.map((p) => "• " + p.text).join("\n"));
+$("tCopyText").onclick = () => tCopy(T.text);
+$("tDl").onclick = () => {
+  const d = new Date(), p = (x) => String(x).padStart(2, "0");
+  download(`思想提示器_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.txt`, tExport());
+};
+$("tNew").onclick = () => {
+  if (T.running) { toast("暫停咗先"); return; }
+  if ((T.text || T.points.length) && !confirm("開新一節？而家嘅逐字稿同提示會清走（想留低就先撳「⬇️ 下載」）。")) return;
+  T.text = ""; T.partial = ""; T.points = []; T.frame = {}; T.dismissed = []; T.lastAnalyzed = ""; T.lastCommitAt = 0;
+  tSave(); tRenderText(); tRenderFrame(); tRenderPoints(); tAi("");
+  $("tGo").textContent = "▶ 開始諗嘢";
+  tStatus("新一節：撳「▶ 開始諗嘢」。");
+};
+tRenderText(); tRenderFrame(); tRenderPoints();
+if (T.text) $("tGo").textContent = "▶ 繼續諗";
 
 showTab(store.get("tab", "dict"));
 loadSettingsUI();
