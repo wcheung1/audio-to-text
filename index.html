@@ -107,17 +107,26 @@
   .frame div + div { border-top: 1px dashed var(--line); }
   .frame span { color: var(--ink); }
   .frame span.empty { color: var(--muted); font-style: italic; }
+  .frame .frame-tools { display: flex; gap: 8px; justify-content: flex-end; margin: 8px 0 2px; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .frame span input { width: 100%; font: inherit; padding: 6px 8px; border-radius: 8px; }
+  .frame span.pinned::after { content: " 📌"; font-size: 12px; }
   .pts-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .pts-wrap { max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
   .points { position: relative; list-style: none; padding: 0; margin: 0; }
+  .points li .done + .done { margin-left: -4px; }
+  .points li .done.no { color: var(--muted); }
+  .thinkbox { max-height: 38vh; overflow-y: auto; white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; color: var(--muted);
+    padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; background: var(--field); }
+  .thinkbox .ans { color: var(--ink); }
   .points li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 6px 10px 10px; margin-bottom: 8px; border-radius: 12px;
     background: var(--field); border: 1px solid var(--line); border-left: 4px solid var(--accent); transition: transform .35s ease; font-size: 16px; line-height: 1.5; }
   .points li.top { font-weight: 700; border-left-color: #d9822b; }
   .points li .k { flex: none; }
   .points li .t { flex: 1; }
   .points li .done { flex: none; min-height: 34px; min-width: 40px; padding: 2px 8px; font-size: 15px; }
-  .points li.fresh { animation: fresh 1.4s ease; }
+  .points li.fresh { animation: fresh 1.4s ease .25s backwards; }
   @keyframes fresh { 0% { opacity: 0; transform: translateY(-6px); background: rgba(31,111,92,.18); } 25% { opacity: 1; transform: none; } 100% { } }
-  .points li.leaving { position: absolute; left: 0; right: 0; pointer-events: none; animation: leave .45s ease forwards; z-index: 0; }
+  .points li.leaving { position: absolute; left: 0; right: 0; pointer-events: none; animation: leave .3s ease forwards; z-index: 0; }
   @keyframes leave { to { opacity: 0; transform: translateX(48px); } }
   .ttext { max-height: 42vh; overflow-y: auto; white-space: pre-wrap; font-size: 16px; line-height: 1.75; padding: 10px 12px;
     border: 1px solid var(--line); border-radius: 10px; background: var(--field); }
@@ -225,7 +234,7 @@
   <!-- ===================== 思想提示器 ===================== -->
   <div id="tabThink" class="hidden">
   <section class="card">
-    <button id="tGo" class="primary" type="button">▶ 開始諗嘢</button>
+    <button id="tGo" class="primary" type="button">▶ 開始講</button>
     <div class="meter" style="margin-top:10px"><i id="tLevel"></i></div>
     <div id="tStatus" class="hint" style="text-align:center;margin-top:8px">一路諗一路講：你講嘅嘢即時出字，AI 喺旁邊即時提你未諗到嘅嘢。</div>
 
@@ -233,14 +242,20 @@
       <div><b>🎯 目標</b><span data-k="goal"></span></div>
       <div><b>🏁 要達成</b><span data-k="outcomes"></span></div>
       <div><b>🛠️ 方法</b><span data-k="means"></span></div>
+      <div id="tDoneRow" class="hidden"><b>✅ 已完成</b><span data-k="done"></span></div>
+      <p class="frame-tools">
+        <button id="tFrameEdit" type="button" class="small">✏️ 自己改</button>
+        <button id="tFrameNew" type="button" class="small">🔀 轉新目標</button>
+      </p>
     </div>
 
     <div class="pts-head">
       <h2 style="margin:0">💡 你可能未諗到</h2>
-      <span id="tAi" class="hint" style="margin:0"></span>
+      <a id="tAi" class="hint" href="#tThinkCard" style="margin:0;text-decoration:none"></a>
     </div>
+    <p class="hint" style="margin:-2px 0 8px">每點右邊：<b>✓</b>＝處理咗／諗過　<b>✕</b>＝唔關事、唔要。剔走之後下面嗰點會移上嚟。</p>
     <div id="tErr" class="status bad hidden" style="margin:0 0 10px"></div>
-    <ul id="tPoints" class="points"></ul>
+    <div class="pts-wrap"><ul id="tPoints" class="points"></ul></div>
     <p class="hint" id="tPointsEmpty">開始講嘢之後，AI 會喺度列出你未諗到嘅嘢，最重要嘅擺最上面。你講咗或者諗過嗰點，佢會自己消失；你亦可以撳 ✓ 剔走。</p>
     <div class="btns">
       <button id="tRefresh" type="button" class="small">↻ 即刻再諗</button>
@@ -251,12 +266,29 @@
   <section class="card">
     <h2>🗣️ 你講過嘅嘢</h2>
     <div id="tText" class="ttext"><span class="hint">（未有）</span></div>
+    <div id="tEditBox" class="hidden">
+      <textarea id="tEdit" rows="10" placeholder="喺度改字，或者貼一段文字入嚟。"></textarea>
+      <label class="check"><input type="checkbox" id="tEditFresh"> 清走舊提示同目標，由頭諗過（貼咗另一件事就剔）</label>
+      <div class="btns">
+        <button id="tEditSave" type="button" class="primary" style="width:auto;font-size:16px;padding:10px 14px">✅ 用呢段文字重新諗</button>
+        <button id="tEditCancel" type="button">取消</button>
+      </div>
+    </div>
     <div class="btns">
+      <button id="tEditBtn" type="button" class="small">✏️ 改／貼文字</button>
       <button id="tCopyText" type="button" class="small">📋 複製逐字稿</button>
       <button id="tDl" type="button" class="small">⬇️ 下載成份 .txt</button>
       <button id="tNew" type="button" class="small danger">🗑️ 開新一節</button>
     </div>
     <p class="hint">會用到 ElevenLabs 即時轉文字（按講嘢時間計）同埋 AI（大約每幾秒分析一次）。內容自動儲喺呢部手機。用緊嘅時候唔好熄 mon、唔好轉 app。</p>
+  </section>
+
+  <section class="card" id="tThinkCard">
+    <div class="pts-head">
+      <h2 style="margin:0">🧠 AI 諗緊乜</h2>
+      <span id="tThinkMeta" class="hint" style="margin:0"></span>
+    </div>
+    <div id="tThink" class="thinkbox"><span class="hint">AI 分析嗰陣，佢嘅思考過程會喺度一路出（供你參考）。</span></div>
   </section>
   </div>
 
@@ -587,42 +619,100 @@ async function aiPolish(text) {
     { role: "user", content: text },
   ], { temperature: 0.3 });
 }
-/** 叫 OpenAI-compatible 嘅 AI，返回佢講嘅文字 */
-async function aiChat(messages, { temperature = 0.3, maxTokens = 0, timeoutMs = 90000 } = {}) {
+/** 叫 OpenAI-compatible 嘅 AI，返回佢講嘅文字。
+ *  有 onDelta 就用串流（stream）：一路收一路俾你睇「思考過程」；冇固定時限，只要佢仲有嘢送嚟就等（idleMs 冇任何嘢先放棄）。 */
+async function aiChat(messages, { temperature = 0.3, maxTokens = 0, timeoutMs = 90000, onDelta = null, idleMs = 45000, maxMs = 300000 } = {}) {
   const a = aiSettings();
   if (!a.key) throw new Error("未設定 AI API key");
   let url = a.base.trim().replace(/\/+$/, "");
   if (!/^https:\/\//i.test(url)) throw new Error("Base URL 要用 https:// 開頭");
   if (!/\/chat\/completions$/.test(url)) url += "/chat/completions";
   const model = a.model.trim();
-  const body = { model, temperature, stream: false, messages };
+  const body = { model, temperature, stream: !!onDelta, messages };
   // 注意：有「思考」嘅 model，思考都計入 max_tokens，所以唔好設得太細，唔係淨係諗、冇字出
   if (maxTokens) body.max_tokens = maxTokens;
   const fast = zaiFastParams(url, model);
   Object.assign(body, fast);
   const t0 = Date.now();
-  const send = async (b) => {
-    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), timeoutMs);
+  aiLastMeta = { ms: 0, reasoning: 0, finish: "" };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctl = new AbortController();
+    let why = "";
+    const first = onDelta ? idleMs : timeoutMs;
+    let idle = setTimeout(() => { why = "idle"; ctl.abort(); }, first);
+    const total = onDelta ? setTimeout(() => { why = "total"; ctl.abort(); }, maxMs) : 0;
+    const bump = () => { clearTimeout(idle); idle = setTimeout(() => { why = "idle"; ctl.abort(); }, idleMs); };
+    const done = () => { clearTimeout(idle); clearTimeout(total); };
+    const abortMsg = () => why === "total" ? `諗咗 ${maxMs / 1000} 秒都未諗完` : `等咗 ${(onDelta ? idleMs : timeoutMs) / 1000} 秒都冇任何回覆`;
+    let r;
     try {
-      return await fetch(url, { method: "POST", signal: ctl.signal,
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + a.key.trim() }, body: JSON.stringify(b) });
+      r = await fetch(url, { method: "POST", signal: ctl.signal,
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + a.key.trim() }, body: JSON.stringify(body) });
     } catch (e) {
-      throw new Error(e.name === "AbortError" ? `等咗 ${timeoutMs / 1000} 秒都冇回覆` : "連唔到 AI（檢查下 Base URL 同網絡）");
-    } finally { clearTimeout(timer); }
-  };
-  let r = await send(body);
-  let raw = await r.text();
-  if (r.status === 400 && Object.keys(fast).length && /thinking|reasoning/i.test(raw)) {
-    for (const k of Object.keys(fast)) delete body[k];           // 呢個 model 唔認「思考」參數：唔加再試
-    r = await send(body); raw = await r.text();
+      done();
+      throw new Error(e.name === "AbortError" ? abortMsg() : "連唔到 AI（檢查下 Base URL 同網絡）");
+    }
+    const streaming = onDelta && r.ok && /event-stream/i.test(r.headers.get("content-type") || "");
+    if (!streaming) {
+      let raw;
+      try { raw = await r.text(); } catch (e) { done(); throw new Error(e.name === "AbortError" ? abortMsg() : "AI 回覆中途斷咗"); }
+      done();
+      if (r.status === 400 && attempt === 0 && Object.keys(fast).length && /thinking|reasoning/i.test(raw)) {
+        for (const k of Object.keys(fast)) delete body[k];         // 呢個 model 唔認「思考」參數：唔加再試
+        continue;
+      }
+      return aiParseWhole(r, raw, t0, onDelta);
+    }
+    // ---- 串流：data: {...} 一行行嚟
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "", content = "", reasoning = "", finish = "";
+    try {
+      for (;;) {
+        const { value, done: end } = await reader.read();
+        if (end) break;
+        bump();
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, i).trim();
+          buf = buf.slice(i + 1);
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          let j; try { j = JSON.parse(data); } catch { continue; }
+          if (j.error) throw new Error("AI：" + (j.error.message || JSON.stringify(j.error)));
+          const ch = j.choices && j.choices[0];
+          if (!ch) continue;
+          const d = ch.delta || {};
+          if (d.reasoning_content) reasoning += d.reasoning_content;
+          if (typeof d.content === "string") content += d.content;
+          if (ch.finish_reason) finish = ch.finish_reason;
+          onDelta({ reasoning, content });
+        }
+      }
+    } catch (e) {
+      done();
+      if (e.name === "AbortError") throw new Error(abortMsg());
+      throw e;
+    }
+    done();
+    aiLastMeta = { ms: Date.now() - t0, reasoning: reasoning.length, finish };
+    const out = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    if (!out) throw new Error(finish === "length" ? "AI 諗得太耐，未寫答案就夠字數上限" : "AI 冇俾文字返嚟");
+    return out;
   }
+  throw new Error("AI 唔接受呢個請求");
+}
+function aiParseWhole(r, raw, t0, onDelta) {
   let j = null;
   try { j = JSON.parse(raw); } catch {}
   aiLastMeta = { ms: Date.now() - t0, reasoning: 0, finish: "" };
+  let reasoningText = "";
   try {
     const u = j.usage || {}, ch = j.choices[0];
-    aiLastMeta.reasoning = (u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens) ||
-      ((ch.message && ch.message.reasoning_content) || "").length;
+    reasoningText = (ch.message && ch.message.reasoning_content) || "";
+    aiLastMeta.reasoning = (u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens) || reasoningText.length;
     aiLastMeta.finish = ch.finish_reason || "";
   } catch {}
   if (!r.ok) {
@@ -633,6 +723,7 @@ async function aiChat(messages, { temperature = 0.3, maxTokens = 0, timeoutMs = 
   }
   let out = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   if (Array.isArray(out)) out = out.map((p) => p.text || "").join("");
+  if (onDelta) onDelta({ reasoning: reasoningText, content: out || "" });
   out = (out || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
   if (!out) throw new Error(aiLastMeta.finish === "length" ? "AI 諗得太耐，未寫答案就夠字數上限" : "AI 冇俾文字返嚟");
   return out;
@@ -1513,29 +1604,43 @@ mic.addEventListener("pointercancel", () => { if (micState === "recording") stop
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     if (micState === "recording") stopRec();
-    if (T.running) thinkStop("⏸ 暫停咗（熄咗 mon 或者轉咗 app）。撳「▶ 繼續諗」再講。");
+    if (T.running) thinkStop("⏸ 暫停咗收聲（熄咗 mon 或者轉咗 app）。AI 會繼續諗埋你講過嘅嘢；撳「▶ 繼續講」再講。");
     if (micStream && micState === "idle" && !T.running) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
   }
 });
 
 // ============================================================ 💡 思想提示器
 // 一路講：ElevenLabs 即時轉文字（連線斷咗會自動駁返）；同一時間 AI 每幾秒睇一次你講過嘅嘢，提你未諗到嘅嘢
-const THINK_PROMPT = `你係「思想提示器」。用戶一路諗嘢一路講（廣東話口述，經語音轉文字，可能有錯字或者斷句怪），你喺旁邊即時幫佢補漏，等佢可以通盤考慮成個大局。
+const THINK_PROMPT = `你係「思想提示器」。用戶一路諗嘢一路講（廣東話口述，經語音轉文字，會有錯字、斷句怪），你喺旁邊即時幫佢補漏，等佢通盤考慮成個大局。
 
-你要做：
-1. 由佢講過嘅嘢推斷：佢嘅「目標」（最終想點）、「要達成」（具體要有咩結果、點先算成功）、「方法」（打算點做）。佢未講清楚就留空字串，唔好自己作。
-2. 列出佢未諗到、但對成件事重要嘅提示，最多 6 個，最重要排第一。特別留意：
-   - 目標未清楚：問佢真正想要乜
-   - 冇講要達成乜、點樣量度成功：提佢
-   - 有目標但未有方法，或者漏咗明顯更好／必要嘅方法：提佢
-   - 由佢已經提過嘅方向出發，再諗：風險、資源（錢、時間、人）、牽涉嘅人、限期、第一步做乜
-3. 佢已經講過、考慮過（包括講咗唔做）嘅，唔好再列；「現有提示」入面佢已經回應咗嘅，就刪走。
-4. 「現有提示」仲未處理嘅，保留原本 id 同寫法（唔好為改而改）；新提示 id 寫 "new"。
-5. 每個提示一句，最多 30 個字，用廣東話口語，要具體、同佢講緊嘅題目直接有關，佢一睇就可以即刻諗（唔好空泛，例如唔好寫「考慮風險」，要寫「如果供應商遲交貨，你有冇後備？」）。
-6. k 係類別：goal（目標）、result（要達成）、means（方法）、risk（風險）、people（人）、next（下一步）、other。
+【最重要：以佢「最近講嘅嘢」為準】
+- 佢轉咗方向、換咗目標，或者話某樣嘢已經搞掂／唔使做／唔需要 → 即刻更新 frame；已經完成或者放棄嘅目標搬去 frame.done；同而家方向無關嘅提示全部刪走。
+- 佢糾正自己或者糾正錯字（例如「我唔係想飲茶，係想飲水」）→ 以糾正後為準，改返所有受影響嘅提示同 frame。
+- 佢直接同你講嘢（例如「你個 list 啲茶整走佢」「呢點唔關事」「仲有冇其他方法？」）→ 照做。
+- 佢已經講過、考慮過、回應過嘅提示 → 刪走。
 
-只輸出一個 JSON，唔好有其他字：
-{"frame":{"goal":"","outcomes":"","means":""},"points":[{"id":"p1","k":"means","text":"……"}]}`;
+【目標框同轉新目標】
+- 「而家嘅目標框」係畫面上顯示緊嘅；標住「用戶親手改」嘅，係佢自己打嘅，要尊重，除非佢之後講嘅嘢明顯轉咗方向。
+- 逐字稿入面有「——（轉新目標）——」：嗰條線之前嘅係舊目標（已經完成或者放低），只當背景；只為線之後嘅新目標出提示。線之後未講嘢，就問佢新目標係乜。
+
+【你要輸出】
+1. frame：
+   - goal：而家嘅目標（佢最終想點）
+   - outcomes：要達成乜（具體結果、點先算成功）
+   - means：方法（打算點做；有幾個就用「；」分開）
+   - done：之前已經完成或者放棄咗嘅目標（用「；」分開）
+   由佢講過嘅嘢合理推斷（例如佢話「想飲水」，goal 就係「飲到水」）；真係完全冇提先留空字串。
+2. points：佢未諗到、但對「而家嘅目標」重要嘅提示，最多 8 個，最重要排第一。由佢已經提過嘅方向出發去諗：
+   - 目標未清楚 → 問佢真正想要乜
+   - 冇講要達成乜、點樣量度成功 → 提佢
+   - 有目標但未有方法，或者漏咗更好／更簡單／必要嘅方法 → 提佢
+   - 風險、資源（錢、時間、工具、人）、牽涉嘅人、限期、下一步
+3. 「現有提示」仍然啱、仲未處理嘅，保留原本 id 同寫法（唔好為改而改）；新提示 id 寫 "new"。
+4. 每個提示一句，最多 30 字，廣東話口語，具體、同佢而家講緊嘅嘢直接有關（唔好空泛，例如唔好寫「考慮風險」，要寫「井咁深，條繩夠唔夠長？」）。
+5. k 係類別：goal（目標）、result（要達成）、means（方法）、risk（風險）、people（人）、next（下一步）、other。
+
+只輸出一個 JSON（唔好加 markdown、唔好有其他字）：
+{"frame":{"goal":"","outcomes":"","means":"","done":""},"points":[{"id":"p1","k":"means","text":"……"}]}`;
 const KIND_ICON = { goal: "🎯", result: "🏁", means: "🛠️", risk: "⚠️", people: "👥", next: "👣", other: "💡" };
 const tJSON = (k, d) => { try { return JSON.parse(store.get(k)) || d; } catch { return d; } };
 const T = {
@@ -1544,10 +1649,15 @@ const T = {
   points: tJSON("think_points", []), frame: tJSON("think_frame", {}), dismissed: tJSON("think_dismissed", []),
   pid: 0, inFlight: false, again: false, lastAnalyzed: "", lastAiStart: 0, anTimer: null,
 };
+T.dismissed = T.dismissed.map((d) => typeof d === "string" ? { text: d, why: "done" } : d);   // 舊格式
+T.dismissedIds = new Set();
+T.frameUser = tJSON("think_frame_user", {});        // 用戶親手改過嘅目標框：{ goal: "…" }
+T.pinLen = Number(store.get("think_pin_len", "0"));  // 改嗰陣逐字稿有幾長（之後未再講嘢就唔俾 AI 改）
 T.pid = T.points.reduce((m, p) => Math.max(m, parseInt(String(p.id).slice(1), 10) || 0), 0);
 const tSave = () => {
   store.set("think_text", T.text); store.set("think_points", JSON.stringify(T.points));
   store.set("think_frame", JSON.stringify(T.frame)); store.set("think_dismissed", JSON.stringify(T.dismissed.slice(-40)));
+  store.set("think_frame_user", JSON.stringify(T.frameUser)); store.set("think_pin_len", String(T.pinLen));
 };
 const tStatus = (m) => { $("tStatus").textContent = m; };
 const tAi = (m) => { $("tAi").textContent = m; };
@@ -1568,20 +1678,26 @@ function tRenderText() {
   }
   if (nearBottom) box.scrollTop = box.scrollHeight;
 }
+let tFrameEditing = false;
 function tRenderFrame() {
+  if (tFrameEditing) return;                         // 你改緊：唔好俾 AI 蓋過
   for (const sp of $("tFrame").querySelectorAll("span[data-k]")) {
-    const v = (T.frame && T.frame[sp.dataset.k] || "").trim();
+    const k = sp.dataset.k, v = (T.frame && T.frame[k] || "").trim();
     sp.textContent = v || "（未講清楚）";
     sp.classList.toggle("empty", !v);
+    sp.classList.toggle("pinned", !!(v && T.frameUser[k] && T.frameUser[k] === v));
   }
+  $("tDoneRow").classList.toggle("hidden", !(T.frame && (T.frame.done || "").trim()));
 }
 function tMakeLi(p) {
   const li = document.createElement("li"); li.dataset.id = p.id;
   const k = document.createElement("span"); k.className = "k";
   const t = document.createElement("span"); t.className = "t";
-  const done = document.createElement("button"); done.className = "done small"; done.type = "button"; done.textContent = "✓"; done.title = "諗過喇";
-  done.onclick = () => tDismiss(p.id);
-  li.append(k, t, done);
+  const done = document.createElement("button"); done.className = "done small"; done.type = "button"; done.textContent = "✓"; done.title = "處理咗／諗過";
+  done.onclick = () => tDismiss(p.id, "done");
+  const no = document.createElement("button"); no.className = "done no small"; no.type = "button"; no.textContent = "✕"; no.title = "唔關事、唔要";
+  no.onclick = () => tDismiss(p.id, "no");
+  li.append(k, t, done, no);
   tUpdateLi(li, p);
   return li;
 }
@@ -1620,10 +1736,11 @@ function tRenderPoints() {
   }
   $("tPointsEmpty").classList.toggle("hidden", T.points.length > 0);
 }
-function tDismiss(id) {
+function tDismiss(id, why = "done") {
   const p = T.points.find((x) => x.id === id);
   if (!p) return;
-  T.dismissed.push(p.text);
+  T.dismissed.push({ text: p.text, why });
+  T.dismissedIds.add(id);
   T.points = T.points.filter((x) => x.id !== id);
   tRenderPoints(); tSave();
   tScheduleAnalyze(400, true);          // 補返一個上嚟
@@ -1658,7 +1775,7 @@ async function tConnect() {
     if (!T.running || T.stopping || gen !== T.gen) return;
     tCommitPartial(); tRenderText(); tSave();
     T.retries++;
-    if (T.retries > 6) { thinkStop("❌ 即時轉文字連線斷咗好多次（" + why + "）。檢查下網絡再撳「▶ 繼續諗」。"); return; }
+    if (T.retries > 6) { thinkStop("❌ 即時轉文字連線斷咗好多次（" + why + "）。檢查下網絡再撳「▶ 繼續講」。"); return; }
     tStatus(`🔄 重新連線緊…（${why}）`);
     setTimeout(() => { if (T.running && gen === T.gen) tConnect(); }, Math.min(6000, 700 * T.retries));
   };
@@ -1752,8 +1869,8 @@ async function thinkStop(msg) {
   T.ready = false; T.queue = [];
   tCommitPartial(); tRenderText(); tSave();
   T.running = false; T.stopping = false;
-  $("tGo").disabled = false; $("tGo").textContent = "▶ 繼續諗"; $("tGo").classList.remove("on");
-  tStatus(msg || "⏸ 暫停咗。撳「▶ 繼續諗」再講。");
+  $("tGo").disabled = false; $("tGo").textContent = "▶ 繼續講"; $("tGo").classList.remove("on");
+  tStatus(msg || (T.inFlight || T.again ? "⏸ 暫停咗收聲。AI 仲諗緊你講過嘅嘢，諗完會話你知；之後撳「▶ 繼續講」，新講嘅會接住加喺「你講過嘅嘢」最尾。" : "⏸ 暫停咗收聲。撳「▶ 繼續講」，新講嘅會接住加喺最尾。"));
   keepAwake(false); releaseMicLater();
   tScheduleAnalyze(0);
 }
@@ -1769,32 +1886,67 @@ async function tAnalyze() {
   if (T.inFlight) { T.again = true; return; }
   const wait = 3000 - (Date.now() - T.lastAiStart);                 // 最快 3 秒一次
   if (wait > 0) { clearTimeout(T.anTimer); T.anTimer = setTimeout(tAnalyze, wait); return; }
-  const partial = T.partial ? (settings().trad ? toTraditional(T.partial) : T.partial) : "";
-  const text = joinSeg(T.text, partial).trim();
+  const text = tCurText();
   if (text.replace(/\s/g, "").length < 8) return;
   if (text === T.lastAnalyzed && !T.force) return;
   if (!aiReady()) { tAi("（未設定 AI：去「⚙️ 設定 → ✨ AI 修飾」貼 AI key）"); return; }
   T.inFlight = true; T.force = false; T.lastAnalyzed = text; T.lastAiStart = Date.now();
-  tAi("🤔 諗緊…");
+  const t0 = Date.now();
+  const sec = () => Math.round((Date.now() - t0) / 1000);
+  tAi("🤔 諗緊… 0 秒"); $("tThinkMeta").textContent = "諗緊…";
+  tShowThinking({ reasoning: "", content: "" });
+  const clock = setInterval(() => { tAi(`🤔 諗緊… ${sec()} 秒`); $("tThinkMeta").textContent = `諗緊… ${sec()} 秒`; }, 1000);
   const shown = text.length > 7000 ? "……（前面略）" + text.slice(-7000) : text;
+  const recent = text.length > 350 ? "……" + text.slice(-350) : text;
   const cur = T.points.map((p) => `${p.id}: ${p.text}`).join("\n") || "（冇）";
-  const dis = T.dismissed.slice(-20).map((d) => "- " + d).join("\n") || "（冇）";
+  const list = (why) => T.dismissed.filter((d) => d.why === why).slice(-15).map((d) => "- " + d.text).join("\n") || "（冇）";
   let terms = []; try { terms = parseTerms(settings().terms); } catch {}
   try {
     const out = await aiChat([
       { role: "system", content: THINK_PROMPT + (terms.length ? "\n\n用戶常用嘅專有名詞：" + terms.join("、") : "") },
-      { role: "user", content: `【用戶講過嘅嘢（語音轉文字）】\n${shown}\n\n【現有提示（由重要到唔重要）】\n${cur}\n\n【用戶已經撳咗「諗過」嘅提示（唔好再提類似嘅）】\n${dis}` },
-    ], { temperature: 0.4, timeoutMs: 60000 });
+      { role: "user", content:
+        `【用戶講過嘅嘢（語音轉文字，由舊到新）】\n${shown}\n\n` +
+        `【最近講嘅（以呢段為準：佢可能轉咗目標、糾正咗自己、或者叫你改個 list）】\n${recent}\n\n` +
+        `【而家嘅目標框】\n${tFrameForAi()}\n\n` +
+        `【現有提示（由重要到唔重要）】\n${cur}\n\n` +
+        `【用戶剔咗「處理咗」嘅提示（唔好再提）】\n${list("done")}\n\n` +
+        `【用戶剔咗「唔關事」嘅提示（唔好再提，類似方向都唔好）】\n${list("no")}` },
+    ], { temperature: 0.4, onDelta: tShowThinking, idleMs: 45000, maxMs: 300000 });
     tApply(out);
-    tAi(`✓ ${(aiLastMeta.ms / 1000).toFixed(1)} 秒`);
+    const t = new Date().toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    tAi(`✓ ${sec()} 秒`); $("tThinkMeta").textContent = `上一次：諗咗 ${sec()} 秒（${t}）`;
     tErr("");
+    if (!T.running && !tEditing() && tCurText() === text) tStatus("✅ AI 諗完喇（諗咗 " + sec() + " 秒）。可以撳「▶ 繼續講」講下一段。");
   } catch (e) {
-    tAi("⚠️ 出錯");
+    tAi("⚠️ 出錯"); $("tThinkMeta").textContent = `出錯（${sec()} 秒）`;
     tErr("⚠️ AI 提示出唔到：" + e.message + "\n（會喺你講下一句嗰陣自動再試；可以喺「⚙️ 設定 → ✨ AI 修飾」撳「🔌 試下連唔連到」睇下）");
   } finally {
+    clearInterval(clock);
     T.inFlight = false;
     if (T.again) { T.again = false; tScheduleAnalyze(200); }
   }
+}
+function tCurText() {
+  const partial = T.partial ? (settings().trad ? toTraditional(T.partial) : T.partial) : "";
+  return joinSeg(T.text, partial).trim();
+}
+/** 喺最底嗰格即時顯示 AI 嘅思考過程（同佢寫緊嘅答案） */
+let tThinkRaf = 0, tThinkLatest = null;
+function tShowThinking(d) {
+  tThinkLatest = d;
+  if (tThinkRaf) return;
+  tThinkRaf = requestAnimationFrame(() => {
+    tThinkRaf = 0;
+    const box = $("tThink"), x = tThinkLatest;
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    box.textContent = x.reasoning || (x.content ? "" : "（等緊 AI 回覆…）");
+    if (x.content) {
+      const sp = document.createElement("span"); sp.className = "ans";
+      sp.textContent = (x.reasoning ? "\n\n✍️ 寫緊提示：\n" : "✍️ 寫緊提示：\n") + x.content;
+      box.appendChild(sp);
+    }
+    if (near) box.scrollTop = box.scrollHeight;
+  });
 }
 function tApply(out) {
   const s = out.replace(/^```(?:json)?\s*|\s*```$/g, "");
@@ -1802,15 +1954,21 @@ function tApply(out) {
   if (a < 0 || b <= a) throw new Error("AI 回覆唔係 JSON");
   const j = JSON.parse(s.slice(a, b + 1));
   if (j.frame && typeof j.frame === "object") {
-    const f = (v) => Array.isArray(v) ? v.join("；") : String(v || "");
-    T.frame = { goal: f(j.frame.goal), outcomes: f(j.frame.outcomes), means: f(j.frame.means) };
+    const f = (v) => Array.isArray(v) ? v.filter(Boolean).join("；") : String(v || "");
+    const nf = { goal: f(j.frame.goal), outcomes: f(j.frame.outcomes), means: f(j.frame.means), done: f(j.frame.done) };
+    const noNewSpeech = T.text.length <= T.pinLen;
+    for (const k of Object.keys(T.frameUser)) {
+      if (noNewSpeech) nf[k] = T.frameUser[k];        // 你啱啱親手改：你講多啲嘢之前，AI 唔可以改
+      else if (nf[k] !== T.frameUser[k]) delete T.frameUser[k];   // 你講咗新嘢、AI 改咗：唔再當你親手改
+    }
+    T.frame = nf;
   }
   if (Array.isArray(j.points)) {
     const known = new Set(T.points.map((p) => p.id)), used = new Set();
-    const dis = new Set(T.dismissed);
+    const disText = new Set(T.dismissed.map((d) => d.text));
     T.points = j.points
-      .filter((p) => p && typeof p.text === "string" && p.text.trim() && !dis.has(p.text.trim()))
-      .slice(0, 6)
+      .filter((p) => p && typeof p.text === "string" && p.text.trim() && !disText.has(p.text.trim()) && !T.dismissedIds.has(String(p.id)))
+      .slice(0, 8)
       .map((p) => {
         let id = String(p.id || "");
         if (!known.has(id) || used.has(id)) id = "p" + (++T.pid);
@@ -1820,13 +1978,85 @@ function tApply(out) {
   }
   tRenderFrame(); tRenderPoints(); tSave();
 }
+function tFrameForAi() {
+  const f = T.frame || {}, u = T.frameUser || {};
+  const row = (k, name) => `${name}：${(f[k] || "").trim() || "（未有）"}${u[k] && u[k] === f[k] ? "（用戶親手改）" : ""}`;
+  return [row("goal", "目標"), row("outcomes", "要達成"), row("means", "方法"), row("done", "已完成")].join("\n");
+}
+// ---------- 自己改目標框
+$("tFrameEdit").onclick = () => {
+  const btn = $("tFrameEdit");
+  const spans = [...$("tFrame").querySelectorAll("span[data-k]")];
+  if (!tFrameEditing) {
+    tFrameEditing = true;
+    $("tDoneRow").classList.remove("hidden");
+    for (const sp of spans) {
+      const inp = document.createElement("input"); inp.type = "text"; inp.value = (T.frame[sp.dataset.k] || "").trim();
+      inp.placeholder = sp.dataset.k === "done" ? "做完／放低咗嘅目標" : "留空＝等 AI 估";
+      sp.textContent = ""; sp.classList.remove("empty", "pinned"); sp.appendChild(inp);
+    }
+    btn.textContent = "💾 儲存"; spans[0].querySelector("input").focus();
+    return;
+  }
+  const nf = { ...T.frame };
+  for (const sp of spans) {
+    const k = sp.dataset.k, v = sp.querySelector("input").value.trim();
+    if (v !== (T.frame[k] || "").trim()) { nf[k] = v; if (v) T.frameUser[k] = v; else delete T.frameUser[k]; }
+  }
+  T.frame = nf; T.pinLen = T.text.length;
+  tFrameEditing = false; btn.textContent = "✏️ 自己改";
+  tRenderFrame(); tSave();
+  toast("✅ 已經改好，AI 會跟你改嘅去諗");
+  T.lastAiStart = 0; tScheduleAnalyze(0, true);
+};
+// ---------- 轉新目標：而家個目標當完成／放低，清走提示，用之後講嘅嘢重新諗
+$("tFrameNew").onclick = () => {
+  if (tFrameEditing) { toast("改緊目標框，撳「💾 儲存」先"); return; }
+  const g = (T.frame.goal || "").trim();
+  if (!confirm(`將而家嘅目標${g ? `「${g}」` : ""}當做完成／放低，清走而家啲提示，用你之後講嘅嘢重新諗？`)) return;
+  T.frame = { goal: "", outcomes: "", means: "", done: [T.frame.done, g].filter(Boolean).join("；") };
+  T.frameUser = {}; T.points = [];
+  if (T.text.trim() && !/——（轉新目標）——\s*$/.test(T.text)) T.text = T.text.replace(/\s+$/, "") + "\n\n——（轉新目標）——\n\n";
+  T.lastCommitAt = 0;
+  tRenderText(); tRenderFrame(); tRenderPoints(); tSave();
+  tStatus(T.running ? "🔀 轉咗新目標，講你新嘅諗法啦。" : "🔀 轉咗新目標。撳「▶ 繼續講」講你新嘅諗法。");
+  T.lastAiStart = 0; tScheduleAnalyze(0, true);
+};
+// ---------- 自己改／貼逐字稿，再叫 AI 重新諗
+const tEditing = () => !$("tEditBox").classList.contains("hidden");
+$("tEditBtn").onclick = async () => {
+  if (tEditing()) return;
+  if (T.running) await thinkStop("⏸ 暫停咗收聲，改緊文字。");
+  $("tEdit").value = T.text;
+  $("tEditFresh").checked = false;
+  $("tEditBox").classList.remove("hidden"); $("tText").classList.add("hidden");
+  $("tGo").disabled = true;
+  $("tEdit").focus();
+};
+function tCloseEdit() {
+  $("tEditBox").classList.add("hidden"); $("tText").classList.remove("hidden");
+  $("tGo").disabled = false;
+}
+$("tEditCancel").onclick = tCloseEdit;
+$("tEditSave").onclick = () => {
+  const v = $("tEdit").value.replace(/\s+$/, "");
+  if ($("tEditFresh").checked) {
+    T.points = []; T.frame = {}; T.frameUser = {}; T.dismissed = []; T.dismissedIds = new Set();
+    tRenderPoints(); tRenderFrame();
+  }
+  T.text = v; T.partial = ""; T.lastCommitAt = 0; T.pinLen = Math.min(T.pinLen, v.length);
+  tCloseEdit(); tRenderText(); tSave();
+  tStatus("✏️ 已經用你改過嘅文字，AI 重新諗緊…（之後撳「▶ 繼續講」，新講嘅會加喺最尾）");
+  T.lastAiStart = 0; tScheduleAnalyze(0, true);
+};
 $("tRefresh").onclick = () => { T.lastAiStart = 0; tScheduleAnalyze(0, true); };
 
 // ---------- 複製、下載、開新一節
 function tExport() {
   const f = T.frame || {};
   const when = new Date().toLocaleString("zh-HK", { dateStyle: "medium", timeStyle: "short" });
-  return `思想提示器　${when}\n\n🎯 目標：${f.goal || "（未講清楚）"}\n🏁 要達成：${f.outcomes || "（未講清楚）"}\n🛠️ 方法：${f.means || "（未講清楚）"}\n\n` +
+  return `思想提示器　${when}\n\n🎯 目標：${f.goal || "（未講清楚）"}\n🏁 要達成：${f.outcomes || "（未講清楚）"}\n🛠️ 方法：${f.means || "（未講清楚）"}\n` +
+    (f.done ? `✅ 已完成：${f.done}\n` : "") + "\n" +
     `💡 未處理嘅提示：\n${T.points.map((p) => "• " + p.text).join("\n") || "（冇）"}\n\n🗣️ 逐字稿：\n${T.text}\n`;
 }
 async function tCopy(text) {
@@ -1841,14 +2071,17 @@ $("tDl").onclick = () => {
 };
 $("tNew").onclick = () => {
   if (T.running) { toast("暫停咗先"); return; }
+  if (tEditing()) tCloseEdit();
+  if (tFrameEditing) { tFrameEditing = false; $("tFrameEdit").textContent = "✏️ 自己改"; }
   if ((T.text || T.points.length) && !confirm("開新一節？而家嘅逐字稿同提示會清走（想留低就先撳「⬇️ 下載」）。")) return;
-  T.text = ""; T.partial = ""; T.points = []; T.frame = {}; T.dismissed = []; T.lastAnalyzed = ""; T.lastCommitAt = 0;
-  tSave(); tRenderText(); tRenderFrame(); tRenderPoints(); tAi("");
-  $("tGo").textContent = "▶ 開始諗嘢";
-  tStatus("新一節：撳「▶ 開始諗嘢」。");
+  T.text = ""; T.partial = ""; T.points = []; T.frame = {}; T.frameUser = {}; T.pinLen = 0; T.dismissed = []; T.dismissedIds = new Set(); T.lastAnalyzed = ""; T.lastCommitAt = 0;
+  tSave(); tRenderText(); tRenderFrame(); tRenderPoints(); tAi(""); tErr("");
+  $("tThink").innerHTML = '<span class="hint">AI 分析嗰陣，佢嘅思考過程會喺度一路出（供你參考）。</span>'; $("tThinkMeta").textContent = "";
+  $("tGo").textContent = "▶ 開始講";
+  tStatus("新一節：撳「▶ 開始講」。");
 };
 tRenderText(); tRenderFrame(); tRenderPoints();
-if (T.text) $("tGo").textContent = "▶ 繼續諗";
+if (T.text) $("tGo").textContent = "▶ 繼續講";
 
 showTab(store.get("tab", "dict"));
 loadSettingsUI();
