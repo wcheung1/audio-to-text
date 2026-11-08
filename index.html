@@ -122,6 +122,8 @@
   .ttext { max-height: 42vh; overflow-y: auto; white-space: pre-wrap; font-size: 16px; line-height: 1.75; padding: 10px 12px;
     border: 1px solid var(--line); border-radius: 10px; background: var(--field); }
   .ttext .partial { color: var(--muted); }
+  .meter { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: #2e9e5b; border-radius: 99px; transition: width .08s linear; }
   .subhead { font-size: 16px; margin: 26px 0 4px; padding-top: 16px; border-top: 1px solid var(--line); }
   code { font-size: 12.5px; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; word-break: break-all; }
   #dict[readonly] { opacity: .85; }
@@ -202,6 +204,13 @@
     <div class="btns"><button id="forgetAi" type="button" class="danger">🗑️ 刪除 AI key</button></div>
     <div id="aiStatus" class="status"></div>
 
+    <h3 class="subhead">🎤 咪</h3>
+    <p class="hint">電腦收唔到聲，多數係 Chrome 揀錯咗咪（例如揀咗「立體聲混音」、虛擬咪或者冇插嘅耳機）。撳「測試咪」，對住講嘢，綠色條有郁先啱；唔郁就喺下面揀過第二個再試。</p>
+    <select id="micSel"><option value="">系統預設</option></select>
+    <div class="meter" style="margin-top:10px"><i id="micLevel"></i></div>
+    <div class="btns"><button id="micTest" type="button">🎤 測試咪（8 秒）</button></div>
+    <div id="micStatus" class="status"></div>
+
     <h3 class="subhead">🧹 清除記錄</h3>
     <p class="hint">呢部手機儲咗：兩條 API key、所有設定、講嘢打字嘅文字、之前轉過嘅結果。唔再用、或者部手機要俾人，可以一下清晒。</p>
     <div class="btns"><button id="wipeAll" type="button" class="danger">🧨 清除呢部手機全部記錄</button></div>
@@ -217,6 +226,7 @@
   <div id="tabThink" class="hidden">
   <section class="card">
     <button id="tGo" class="primary" type="button">▶ 開始諗嘢</button>
+    <div class="meter" style="margin-top:10px"><i id="tLevel"></i></div>
     <div id="tStatus" class="hint" style="text-align:center;margin-top:8px">一路諗一路講：你講嘅嘢即時出字，AI 喺旁邊即時提你未諗到嘅嘢。</div>
 
     <div class="frame" id="tFrame">
@@ -229,6 +239,7 @@
       <h2 style="margin:0">💡 你可能未諗到</h2>
       <span id="tAi" class="hint" style="margin:0"></span>
     </div>
+    <div id="tErr" class="status bad hidden" style="margin:0 0 10px"></div>
     <ul id="tPoints" class="points"></ul>
     <p class="hint" id="tPointsEmpty">開始講嘢之後，AI 會喺度列出你未諗到嘅嘢，最重要嘅擺最上面。你講咗或者諗過嗰點，佢會自己消失；你亦可以撳 ✓ 剔走。</p>
     <div class="btns">
@@ -254,6 +265,7 @@
   <section class="card">
     <div class="mic-wrap">
       <button id="mic" class="mic" type="button" aria-label="撳住講嘢">🎙️<span id="micLabel">撳住講嘢</span></button>
+      <div class="meter" style="width:180px"><i id="dLevel"></i></div>
       <div class="hint" id="dStatus" style="text-align:center">撳住講，放手就變文字。撳一下＝開始，再撳一下＝停。</div>
     </div>
     <div class="selhint" id="selHint"></div>
@@ -582,21 +594,37 @@ async function aiChat(messages, { temperature = 0.3, maxTokens = 0, timeoutMs = 
   let url = a.base.trim().replace(/\/+$/, "");
   if (!/^https:\/\//i.test(url)) throw new Error("Base URL 要用 https:// 開頭");
   if (!/\/chat\/completions$/.test(url)) url += "/chat/completions";
-  const body = { model: a.model.trim(), temperature, stream: false, messages };
+  const model = a.model.trim();
+  const body = { model, temperature, stream: false, messages };
+  // 注意：有「思考」嘅 model，思考都計入 max_tokens，所以唔好設得太細，唔係淨係諗、冇字出
   if (maxTokens) body.max_tokens = maxTokens;
-  // z.ai／智譜：關咗「思考」，快好多（其他 AI 唔識呢個參數，所以唔加）
-  if (/^https:\/\/([a-z0-9-]+\.)*(z\.ai|bigmodel\.cn)\//i.test(url)) body.thinking = { type: "disabled" };
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), timeoutMs);
-  let r;
-  try {
-    r = await fetch(url, { method: "POST", signal: ctl.signal,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + a.key.trim() }, body: JSON.stringify(body) });
-  } catch (e) {
-    throw new Error(e.name === "AbortError" ? `等咗 ${timeoutMs / 1000} 秒都冇回覆` : "連唔到 AI（檢查下 Base URL 同網絡）");
-  } finally { clearTimeout(timer); }
-  const raw = await r.text();
+  const fast = zaiFastParams(url, model);
+  Object.assign(body, fast);
+  const t0 = Date.now();
+  const send = async (b) => {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), timeoutMs);
+    try {
+      return await fetch(url, { method: "POST", signal: ctl.signal,
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + a.key.trim() }, body: JSON.stringify(b) });
+    } catch (e) {
+      throw new Error(e.name === "AbortError" ? `等咗 ${timeoutMs / 1000} 秒都冇回覆` : "連唔到 AI（檢查下 Base URL 同網絡）");
+    } finally { clearTimeout(timer); }
+  };
+  let r = await send(body);
+  let raw = await r.text();
+  if (r.status === 400 && Object.keys(fast).length && /thinking|reasoning/i.test(raw)) {
+    for (const k of Object.keys(fast)) delete body[k];           // 呢個 model 唔認「思考」參數：唔加再試
+    r = await send(body); raw = await r.text();
+  }
   let j = null;
   try { j = JSON.parse(raw); } catch {}
+  aiLastMeta = { ms: Date.now() - t0, reasoning: 0, finish: "" };
+  try {
+    const u = j.usage || {}, ch = j.choices[0];
+    aiLastMeta.reasoning = (u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens) ||
+      ((ch.message && ch.message.reasoning_content) || "").length;
+    aiLastMeta.finish = ch.finish_reason || "";
+  } catch {}
   if (!r.ok) {
     const m = j && ((j.error && (j.error.message || j.error.code)) || j.message || j.msg);
     const hint = { 400: "（可能係 model 名唔啱）", 401: "（AI API key 唔啱）", 403: "（呢條 key 冇權用呢個 model）",
@@ -606,8 +634,17 @@ async function aiChat(messages, { temperature = 0.3, maxTokens = 0, timeoutMs = 
   let out = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   if (Array.isArray(out)) out = out.map((p) => p.text || "").join("");
   out = (out || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  if (!out) throw new Error("AI 冇俾文字返嚟");
+  if (!out) throw new Error(aiLastMeta.finish === "length" ? "AI 諗得太耐，未寫答案就夠字數上限" : "AI 冇俾文字返嚟");
   return out;
+}
+let aiLastMeta = { ms: 0, reasoning: 0, finish: "" };
+/** z.ai／智譜：叫佢少啲「思考」，快好多。
+ *  GLM-5.3 起（包括 glm-5.3-flash）思考關唔到，只可以調到 low；舊啲嘅 GLM 可以直接關。其他 AI 唔加任何參數。 */
+function zaiFastParams(url, model) {
+  if (!/^https:\/\/([a-z0-9-]+\.)*(z\.ai|bigmodel\.cn)\//i.test(url)) return {};
+  const m = /glm-(\d+)(?:\.(\d+))?/i.exec(model);
+  const v = m ? Number(m[1]) + Number(m[2] || 0) / 10 : 0;
+  return v >= 5.3 ? { thinking: { type: "enabled" }, reasoning_effort: "low" } : { thinking: { type: "disabled" } };
 }
 
 function saveAiFromUI() {
@@ -637,10 +674,11 @@ $("testAi").onclick = async () => {
   const st = $("aiStatus");
   st.className = "status"; st.textContent = "⏳ 試緊…";
   try {
-    const t0 = Date.now();
     const out = await aiPolish("嗯，即係呢，我哋聽日呀，聽日下晝三點開會，咁樣，記得帶埋份報告。");
+    const sec = aiLastMeta.ms / 1000;
     st.className = "status ok";
-    st.textContent = `✅ 連到（${((Date.now() - t0) / 1000).toFixed(1)} 秒）。AI 整理咗句測試句做：\n${out}`;
+    st.textContent = `✅ 連到（${sec.toFixed(1)} 秒` + (aiLastMeta.reasoning ? `，佢「思考」咗大約 ${aiLastMeta.reasoning} 個 token` : "") + `）。AI 整理咗句測試句做：\n${out}` +
+      (sec > 10 ? "\n\n⚠️ 呢個 AI 比較慢：思想提示器會慢過你講嘢好多。可以試下喺 Model 度換一個快啲嘅 model。" : "");
   } catch (e) { st.className = "status bad"; st.textContent = "❌ " + e.message; }
 };
 $("forgetAi").onclick = () => {
@@ -1038,10 +1076,87 @@ $("dClear").onclick = () => {
 };
 
 async function getMic() {
-  if (micStream && micStream.getTracks().some((t) => t.readyState === "live")) return micStream;
-  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const want = store.get("mic");
+  if (micStream && micStream._dev === want && micStream.getTracks().some((t) => t.readyState === "live")) return micStream;
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  const base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: want ? { ...base, deviceId: { exact: want } } : base });
+  } catch (e) {
+    if (!want || !/Overconstrained|NotFound|NotReadable/.test(e.name)) throw e;
+    store.del("mic");                                // 揀咗嘅咪已經唔喺度：用返預設
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: base });
+  }
+  micStream._dev = store.get("mic");
   return micStream;
 }
+
+// ---------- 音量條：睇到個咪有冇收到聲
+const SILENT = 0.004;            // 低過呢個音量（RMS）當冇聲
+function attachMeter(ac, stream, bar) {
+  const src = ac.createMediaStreamSource(stream), an = ac.createAnalyser();
+  an.fftSize = 1024;
+  src.connect(an);
+  const buf = new Float32Array(an.fftSize);
+  const m = { peak: 0, raf: 0 };
+  const loop = () => {
+    an.getFloatTimeDomainData(buf);
+    let s = 0;
+    for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+    const rms = Math.sqrt(s / buf.length);
+    m.peak = Math.max(m.peak, rms);
+    if (bar) bar.style.width = Math.min(100, Math.sqrt(rms) * 220) + "%";
+    m.raf = requestAnimationFrame(loop);
+  };
+  loop();
+  m.stop = () => { cancelAnimationFrame(m.raf); try { src.disconnect(); } catch {} if (bar) bar.style.width = "0"; };
+  return m;
+}
+const MIC_HINT = "個咪好似收唔到聲。電腦：去「⚙️ 設定 → 🎤 咪」撳「測試咪」，揀啱個咪；或者喺 Chrome 網址列左邊撳個掣 → 網站設定 → 麥克風，揀返你平時用嗰個。";
+
+async function fillMicList() {
+  const sel = $("micSel"), want = store.get("mic");
+  let devs = [];
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput"); } catch {}
+  sel.innerHTML = "";
+  sel.add(new Option("系統預設", ""));
+  devs.filter((d) => d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications")
+      .forEach((d, i) => sel.add(new Option(d.label || `咪 ${i + 1}（未俾權限，撳「測試咪」先見到名）`, d.deviceId)));
+  sel.value = [...sel.options].some((o) => o.value === want) ? want : "";
+}
+$("micSel").onchange = () => {
+  if ($("micSel").value) store.set("mic", $("micSel").value); else store.del("mic");
+  if (micStream && micState === "idle" && !T.running) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  $("micStatus").textContent = "已經轉咗，撳「測試咪」試下。"; $("micStatus").className = "status";
+};
+$("micTest").onclick = async () => {
+  if (micState !== "idle" || T.running) { toast("用緊咪，停咗先"); return; }
+  const st = $("micStatus"), btn = $("micTest");
+  let ac;
+  try { ac = new AC(); if (ac.resume) ac.resume(); } catch { st.textContent = "❌ 呢個瀏覽器開唔到聲音處理"; return; }
+  btn.disabled = true;
+  try {
+    const stream = await getMic();
+    await fillMicList();
+    const name = (stream.getAudioTracks()[0] || {}).label || "預設咪";
+    st.className = "status"; st.textContent = `🎤 用緊：${name}\n對住個咪講嘢…`;
+    const m = attachMeter(ac, stream, $("micLevel"));
+    await sleep(8000);
+    m.stop();
+    st.className = m.peak >= SILENT ? "status ok" : "status bad";
+    st.textContent = m.peak >= SILENT
+      ? `✅ 收到聲（${name}）。呢個咪用得。`
+      : `❌ ${name} 收唔到聲。喺上面揀過第二個咪再試；或者檢查電腦嘅聲音設定（Windows：設定 → 系統 → 音效 → 輸入）。`;
+  } catch (e) {
+    st.className = "status bad";
+    st.textContent = e && e.name === "NotAllowedError"
+      ? "❌ Chrome 唔俾用咪：撳網址列左邊個掣 → 網站設定 → 麥克風 → 允許，再重新整理。Windows 亦要喺「設定 → 私隱權 → 麥克風」開咗俾桌面 app 用。"
+      : "❌ 開唔到咪：" + (e && e.message || e);
+  } finally {
+    btn.disabled = false; ac.close().catch(() => {}); releaseMicLater();
+  }
+};
+if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) fillMicList();
 function releaseMicLater() {      // 停咗 1 分鐘就熄咪（手機頂嗰粒「用緊咪」燈會熄）
   clearTimeout(releaseTimer);
   releaseTimer = setTimeout(() => {
@@ -1069,13 +1184,15 @@ async function startRec() {
   target = currentSel();
   micState = "starting"; releasedWhileStarting = false; setMicUI();
   let ac = null;
-  if (isLive) { try { ac = new AC(); if (ac.resume) ac.resume(); } catch { ac = null; } }   // iPhone：要喺撳落去嗰下開
+  try { ac = AC ? new AC() : null; if (ac && ac.resume) ac.resume(); } catch { ac = null; }   // iPhone：要喺撳落去嗰下開
   try {
     const stream = await getMic();
+    dMeter = ac ? attachMeter(ac, stream, $("dLevel")) : null;
     if (isLive) {
       if (!ac) throw new Error("開唔到聲音處理");
       beginLive(stream, ac, s);
     } else {
+      recAc = ac;
       chunks = [];
       recorder = MIME ? new MediaRecorder(stream, { mimeType: MIME }) : new MediaRecorder(stream);
       recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -1096,6 +1213,7 @@ async function startRec() {
     }
     setMicUI();
   } catch (e) {
+    stopDMeter();
     if (ac) ac.close().catch(() => {});
     micState = "idle"; setMicUI();
     dsay(e && e.name === "NotAllowedError"
@@ -1103,7 +1221,13 @@ async function startRec() {
       : "❌ 開唔到咪：" + (e && e.message || e));
   }
 }
+let dMeter = null, recAc = null, lastPeak = 1;
+function stopDMeter() {         // 停音量條，記低今次最大音量；講完先轉嗰個聲音處理亦喺度閂
+  if (dMeter) { lastPeak = dMeter.peak; dMeter.stop(); dMeter = null; }
+  if (recAc) { recAc.close().catch(() => {}); recAc = null; }
+}
 function cancelRec() {          // 唔要呢段錄音
+  stopDMeter();
   clearInterval(recTimer);
   micState = "idle"; toggleMode = false; setMicUI();
   if (live) abortLive();
@@ -1112,6 +1236,7 @@ function cancelRec() {          // 唔要呢段錄音
 }
 function stopRec() {
   if (micState !== "recording") return;
+  stopDMeter();
   clearInterval(recTimer);
   toggleMode = false;
   if (live) { endLive(); }
@@ -1210,6 +1335,7 @@ function abortLive() {
 function liveFail(L, e) {
   if (live !== L) return;
   live = null;
+  stopDMeter();
   clearInterval(recTimer); stopLiveAudio(L); closeLiveWs(L);
   let keep = joinSeg(L.committed, L.partial);
   if (keep && settings().trad) keep = toTraditional(keep);
@@ -1250,7 +1376,7 @@ async function finishDictText(raw, before, after, replaced) {
   if (s.trad) text = toTraditional(text);
   if (s.rules.length) text = applyRules(text, s.rules)[0];
   if (replaced && !/[。，！？.!?,]$/.test(replaced)) text = text.replace(/[。，！？.!?,、]+$/, "");
-  if (!text) { text = replaced; note = "聽唔到有人講嘢"; }
+  if (!text) { text = replaced; note = lastPeak < SILENT ? MIC_HINT : "聽唔到有人講嘢"; }
   else if (!replaced && aiSettings().auto && aiReady()) {
     dict.value = before + text + after;
     dsay("✨ AI 修飾緊…");
@@ -1293,6 +1419,8 @@ function finishRec() {
   const type = (recorder && recorder.mimeType) || MIME || "audio/webm";
   const blob = new Blob(chunks, { type });
   chunks = [];
+  const peak = lastPeak;
+  if (ms >= 600 && peak < SILENT / 3) { dsay("❌ " + MIC_HINT); showSel(); return; }   // 完全冇聲：唔使送去 ElevenLabs 嘥錢
   if (ms < 600 || blob.size < 1000) { dsay("太短喇，撳住個咪講嘢，講完先放手。"); showSel(); return; }
   // 喺目標位置放個「⏳」記號（取代揀咗嘅字），轉好再換做文字；期間你照樣可以改其他地方、再錄下一段
   const id = ++seq, mark = `〔⏳${id}〕`;
@@ -1306,10 +1434,10 @@ function finishRec() {
   if (document.activeElement === dict) dict.setSelectionRange(start + mark.length, start + mark.length);
   $("selHint").textContent = "";
   dsay("⏳ 轉緊文字…");
-  transcribeClip(blob, type, id, mark, replaced);
+  transcribeClip(blob, type, id, mark, replaced, peak);
 }
 
-async function transcribeClip(blob, type, id, mark, replaced) {
+async function transcribeClip(blob, type, id, mark, replaced, peak = 1) {
   const s = settings();
   let terms = [];
   try { terms = parseTerms(s.terms); } catch {}
@@ -1333,7 +1461,7 @@ async function transcribeClip(blob, type, id, mark, replaced) {
     if (s.rules.length) text = applyRules(text, s.rules)[0];
     // 只係改幾隻字嘅話，唔好俾佢自己加個「。」
     if (replaced && !/[。，！？.!?,]$/.test(replaced)) text = text.replace(/[。，！？.!?,、]+$/, "");
-    if (!text) err = "聽唔到有人講嘢";
+    if (!text) err = peak < SILENT ? MIC_HINT : "聽唔到有人講嘢";
     else if (!replaced && aiSettings().auto && aiReady()) {
       dsay("✨ AI 修飾緊…");
       try { text = await aiPolish(text); } catch (e) { polishNote = "⚠️ AI 修飾唔到：" + e.message + "（保留咗原文）"; }
@@ -1423,6 +1551,7 @@ const tSave = () => {
 };
 const tStatus = (m) => { $("tStatus").textContent = m; };
 const tAi = (m) => { $("tAi").textContent = m; };
+const tErr = (m) => { $("tErr").textContent = m; $("tErr").classList.toggle("hidden", !m); };
 
 // ---------- 畫面
 function tRenderText() {
@@ -1592,6 +1721,10 @@ async function thinkStart() {
   A.mute.gain.value = 0;
   A.src.connect(A.proc); A.proc.connect(A.mute); A.mute.connect(ac.destination);
   A.proc.onaudioprocess = (e) => { if (T.running && !T.stopping) tSend(toPcm16(e.inputBuffer.getChannelData(0), ac.sampleRate)); };
+  A.meter = attachMeter(ac, stream, $("tLevel"));
+  setTimeout(() => {                                   // 開咗 8 秒都完全冇聲：多數係揀錯咪
+    if (T.running && T.audio === A && A.meter.peak < SILENT) tStatus("⚠️ " + MIC_HINT);
+  }, 8000);
   $("tGo").textContent = "⏸ 暫停"; $("tGo").classList.add("on");
   tStatus("⏳ 連緊…（可以開始講，唔會漏）");
   if (!aiReady()) tAi("（未設定 AI：只會出字。去「⚙️ 設定 → ✨ AI 修飾」貼 AI key）");
@@ -1605,7 +1738,7 @@ async function thinkStop(msg) {
   T.stopping = true;
   clearInterval(T.tick);
   const A = T.audio;
-  if (A) { try { A.proc.onaudioprocess = null; A.src.disconnect(); A.proc.disconnect(); A.mute.disconnect(); A.ac.close(); } catch {} }
+  if (A) { try { A.meter.stop(); A.proc.onaudioprocess = null; A.src.disconnect(); A.proc.disconnect(); A.mute.disconnect(); A.ac.close(); } catch {} }
   T.audio = null;
   $("tGo").disabled = true; tStatus("⏳ 執緊尾…");
   if (T.ready && T.ws && T.ws.readyState === 1) {           // 叫佢交埋最後嗰句
@@ -1651,11 +1784,13 @@ async function tAnalyze() {
     const out = await aiChat([
       { role: "system", content: THINK_PROMPT + (terms.length ? "\n\n用戶常用嘅專有名詞：" + terms.join("、") : "") },
       { role: "user", content: `【用戶講過嘅嘢（語音轉文字）】\n${shown}\n\n【現有提示（由重要到唔重要）】\n${cur}\n\n【用戶已經撳咗「諗過」嘅提示（唔好再提類似嘅）】\n${dis}` },
-    ], { temperature: 0.4, maxTokens: 900, timeoutMs: 45000 });
+    ], { temperature: 0.4, timeoutMs: 60000 });
     tApply(out);
-    tAi("✓ " + new Date().toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    tAi(`✓ ${(aiLastMeta.ms / 1000).toFixed(1)} 秒`);
+    tErr("");
   } catch (e) {
-    tAi("⚠️ " + e.message);
+    tAi("⚠️ 出錯");
+    tErr("⚠️ AI 提示出唔到：" + e.message + "\n（會喺你講下一句嗰陣自動再試；可以喺「⚙️ 設定 → ✨ AI 修飾」撳「🔌 試下連唔連到」睇下）");
   } finally {
     T.inFlight = false;
     if (T.again) { T.again = false; tScheduleAnalyze(200); }
